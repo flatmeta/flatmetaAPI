@@ -3,16 +3,22 @@ const express = require("express");
 const bodyParser = require('body-parser');
 const methodOverride = require('method-override')
 const app = express();
-//const cors = require('cors');
+const cors = require('cors');
 const mysql = require('mysql');
 
-let io = require('socket.io')();
 
 const PORT = process.env.NODE_PORT || 3500;
 
 app.use(bodyParser.json());
 app.use(methodOverride());
 //app.use(cors());
+
+app.use(cors({
+    origin: "*"
+}))
+
+
+
 
 //connecting to DataBase
 var con = mysql.createConnection({
@@ -32,13 +38,7 @@ const serverInstance = app.listen(PORT, () => {
     //console.log(`Server Running at port: ${PORT}`);
 })
 
-io.attach(serverInstance, {
-    cors: {
-        origin: "http://localhost:8100",
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-});
+let io = require('socket.io')(serverInstance);
 
 io.on('connection', (socket) => {
 
