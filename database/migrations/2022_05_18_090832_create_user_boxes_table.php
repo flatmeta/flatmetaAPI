@@ -19,7 +19,7 @@ class CreateUserBoxesTable extends Migration
             $table->foreignId('order_id')->references('id')->on('orders');
             $table->string('lat',255);
             $table->string('lng',255);
-            $table->string('image',255);
+            $table->string('image',255)->nullable();;
             $table->string('price',255);
             
             $table->timestamps();
