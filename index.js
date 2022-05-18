@@ -6,19 +6,13 @@ const app = express();
 const cors = require('cors');
 const mysql = require('mysql');
 
+let io = require('socket.io')();
 
 const PORT = process.env.NODE_PORT || 3500;
 
 app.use(bodyParser.json());
 app.use(methodOverride());
-//app.use(cors());
-
-app.use(cors({
-    origin: "*"
-}))
-
-
-
+app.use(cors());
 
 //connecting to DataBase
 var con = mysql.createConnection({
@@ -38,7 +32,11 @@ const serverInstance = app.listen(PORT, () => {
     //console.log(`Server Running at port: ${PORT}`);
 })
 
-let io = require('socket.io')(serverInstance);
+io.attach(serverInstance, {
+    cors: {
+        origin: '*',
+    }
+});
 
 io.on('connection', (socket) => {
 
