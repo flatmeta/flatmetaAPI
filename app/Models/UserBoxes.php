@@ -8,4 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 class UserBoxes extends Model
 {
     use HasFactory;
+
+    public static function GetUserTiles()
+    {
+        return self::select('user_boxes.*','orders.custom_details','orders.user_id')
+        ->leftJoin('orders','orders.id','=','user_boxes.order_id')
+        ->get();
+    }
+    
 }
