@@ -31,7 +31,17 @@ const serverInstance = app.listen(PORT, () => {
     //console.log(`Server Running at port: ${PORT}`);
 })
 
-const io = require('socket.io')(serverInstance, { cors: { origin: "*" } });
+const io = require('socket.io')(serverInstance, {
+    handlePreflightRequest: (req, res) => {
+        const headers = {
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Origin": "*", //or the specific origin you want to give access to,
+            "Access-Control-Allow-Credentials": true
+        };
+        res.writeHead(200, headers);
+        res.end();
+    }
+});
 
 // io.attach(serverInstance, {
 //     cors: {
