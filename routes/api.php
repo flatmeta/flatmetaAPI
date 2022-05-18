@@ -18,45 +18,45 @@ $router->post('/login','App\Http\Controllers\PassportAuthController@login');
 $router->post('/register','App\Http\Controllers\PassportAuthController@register');
 
 ## User Boxes  ##
-$router->get('/PurchasedTiles','UserBoxesController@PurchasedTiles');
-$router->get('/RemoveUserCart','CartController@RemoveUserCart');
+$router->get('/PurchasedTiles','App\Http\Controllers\UserBoxesController@PurchasedTiles');
+$router->get('/RemoveUserCart','App\Http\Controllers\CartController@RemoveUserCart');
 
 ## User Boxes  ##
 
-$router->get('/BoxImages','ImageController@BoxImages');
+$router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
 
 
 Route::middleware('auth:api')->group(function () use ($router) {
     ## User ##
-    $router->get('/getuserbytoken','UsersController@GetUserDetails');
-    $router->post('/UpdateUser','UsersController@UpdateUser');
-    $router->post('/UploadUserImage','UsersController@UploadUserImage');
+    $router->get('/getuserbytoken','App\Http\Controllers\UsersController@GetUserDetails');
+    $router->post('/UpdateUser','App\Http\Controllers\UsersController@UpdateUser');
+    $router->post('/UploadUserImage','App\Http\Controllers\UsersController@UploadUserImage');
 
     ## User ##
 
     ## Cart ##
-    $router->post('/AddToCart','CartController@AddToCart');
-    $router->get('/GetCartByUser','CartController@GetCartByUser');
-    $router->get('/RemoveUserCart','CartController@RemoveUserCart');
+    $router->post('/AddToCart','App\Http\Controllers\CartController@AddToCart');
+    $router->get('/GetCartByUser','App\Http\Controllers\CartController@GetCartByUser');
+    $router->get('/RemoveUserCart','App\Http\Controllers\CartController@RemoveUserCart');
     
     ## Cart ##
 
     ## Order ##
-    $router->get('/BuyNow','OrdersController@BuyNow');
-    $router->post('/UpdateCustomDetails','OrdersController@UpdateCustomDetails');
-    $router->post('/UpdateSalePrice','OrdersController@UpdateSalePrice');
-    $router->get('/SaleList','OrdersController@SaleList');
+    $router->get('/BuyNow','App\Http\Controllers\OrdersController@BuyNow');
+    $router->post('/UpdateCustomDetails','App\Http\Controllers\OrdersController@UpdateCustomDetails');
+    $router->post('/UpdateSalePrice','App\Http\Controllers\OrdersController@UpdateSalePrice');
+    $router->get('/SaleList','App\Http\Controllers\OrdersController@SaleList');
     ## Order ##
 
     ## User Boxes  ##
-    $router->post('/UpdateBoxImage','ImageController@UpdateBoxImage');
-    $router->post('/UploadBoxesImage','ImageController@UploadBoxesImage');
+    $router->post('/UpdateBoxImage','App\Http\Controllers\ImageController@UpdateBoxImage');
+    $router->post('/UploadBoxesImage','App\Http\Controllers\ImageController@UploadBoxesImage');
     ## User Boxes  ##
 
     ## User Followers  ##
-    $router->post('/SendFriendRequest','UserFollowersController@SendFriendRequest');
-    $router->get('/GetAllFriendRequest','UserFollowersController@GetAllFriendRequest');
-    $router->post('/UpdateFriendRequestStatus','UserFollowersController@UpdateFriendRequestStatus');
+    $router->post('/SendFriendRequest','App\Http\Controllers\UserFollowersController@SendFriendRequest');
+    $router->get('/GetAllFriendRequest','App\Http\Controllers\UserFollowersController@GetAllFriendRequest');
+    $router->post('/UpdateFriendRequestStatus','App\Http\Controllers\UserFollowersController@UpdateFriendRequestStatus');
     ## User Followers  ##
 });
 
