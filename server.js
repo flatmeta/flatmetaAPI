@@ -6,7 +6,6 @@ const app = express();
 const cors = require('cors');
 const mysql = require('mysql');
 
-let io = require('socket.io')();
 
 const PORT = process.env.NODE_PORT || 3500;
 
@@ -32,13 +31,15 @@ const serverInstance = app.listen(PORT, () => {
     //console.log(`Server Running at port: ${PORT}`);
 })
 
-io.attach(serverInstance, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-});
+const io = require('socket.io')(serverInstance, { cors: { origin: "*" } });
+
+// io.attach(serverInstance, {
+//     cors: {
+//         origin: "*",
+//         methods: ["GET", "POST"],
+//         credentials: true
+//     }
+// });
 
 io.on('connection', (socket) => {
 
