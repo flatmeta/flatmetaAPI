@@ -94,9 +94,7 @@ class PassportAuthController extends Controller
      
             if (auth()->attempt($data)) {
                 $token = auth()->user()->createToken('flatmeta')->accessToken;
-                $data['token'] = $token;
-
-                return response()->json(['status' => true, 'data' => $data]);
+                return response()->json(['status' => true, 'access_token' => $token]);
             } else {
                 return response()->json(['error' => 'Unauthorised'], 401);
             }
