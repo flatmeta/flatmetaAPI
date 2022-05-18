@@ -34,7 +34,7 @@ const serverInstance = app.listen(PORT, () => {
 
 io.attach(serverInstance, {
     cors: {
-        origin: '*',
+        origin: 'http://localhost:8100',
     }
 });
 
