@@ -135,10 +135,31 @@ class UsersController extends Controller
             
             $users = User::all();
 
-            dd($users);
+            foreach($users as $key => $user){
 
-            //foreach(){}
- 
+                $data['users'][$key]['id'] = $user->id;
+                $data['users'][$key]['fullname'] = $user->fullname;
+                $data['users'][$key]['username'] = $user->username;
+
+                $userfile_path = env('APP_URL').'assets/uploads/users/';
+
+                if(empty($user->image)){ 
+                    $data['image'] = $userfile_path.'noimage.png';
+                }else{
+                    $data['image'] = $userfile_path.$user->image;
+                }
+                
+                $data['users'][$key]['status'] = $user->status;
+
+            }
+
+            if(!empty($data)){
+                return response()->json(['status' => true, 'data' => $data]);
+            }else{
+                $data['users'] = array();
+                return response()->json(['status' => true, 'data' => $data]);
+            }
+
             $data['message'] = "Unsupported Media Type";
             return response()->json(['status' => false, 'data' => $data]);
             
