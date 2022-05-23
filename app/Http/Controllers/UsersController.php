@@ -128,4 +128,24 @@ class UsersController extends Controller
         }
 
     }
+
+    public function GetAllUser(){
+
+        try{
+            
+            $users = User::all();
+
+            dd($users);
+
+            //foreach(){}
+ 
+            $data['message'] = "Unsupported Media Type";
+            return response()->json(['status' => false, 'data' => $data]);
+            
+           
+        }catch(BadRequestException $e){
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+
+    }
 }

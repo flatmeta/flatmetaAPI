@@ -32,6 +32,8 @@ Route::middleware('auth:api')->group(function () use ($router) {
     $router->post('/UpdateUser','App\Http\Controllers\UsersController@UpdateUser');
     $router->post('/UploadUserImage','App\Http\Controllers\UsersController@UploadUserImage');
 
+    $router->get('/GetAllUser','App\Http\Controllers\UsersController@GetAllUser');
+    
     ## User ##
 
     ## Cart ##

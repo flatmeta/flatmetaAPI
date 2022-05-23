@@ -45,7 +45,9 @@ io.on('connection', (socket) => {
 
             //Mysql Insert
             //let sql = "SELECT * FROM  users where (email = '" + req.body.email + "')";
-            let sql = "INSERT INTO chats(room_id, sender_id, message) VALUES ('" + message.room_id + "','" + message.sender_id + "','" + message.message + "')";
+            let time = Date.now();
+            time = Date(time);
+            let sql = "INSERT INTO chats(room_id, sender_id, message, created_at) VALUES ('" + message.room_id + "','" + message.sender_id + "','" + message.message + "','" + time + "')";
             con.query(sql, (err, result) => {
                 if (err) throw err;
             });
