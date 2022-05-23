@@ -140,10 +140,10 @@ class UsersController extends Controller
 
             foreach($users as $key => $user){
                 if(!empty($userdata)){  
-                    $friends = UserFollowers::where('user_id',$request->user_id)->where('follower_user_id',$user->id)->first();
+                    $friends = UserFollowers::where('user_id',$request->user_id)->where('follower_user_id',$user->id)->where('status','!=','3')->get();
 
                     if(empty($friends)){
-                        $friends = UserFollowers::where('user_id',$user->id)->where('follower_user_id',$request->user_id)->first();
+                        $friends = UserFollowers::where('user_id',$user->id)->where('follower_user_id',$request->user_id)->where('status','!=','3')->get();
                     }
                 }
 
