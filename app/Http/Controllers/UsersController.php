@@ -140,7 +140,7 @@ class UsersController extends Controller
 
             foreach($users as $key => $user){
                 if(!empty($request->user_id)){  
-                    $friends = UserFollowers::where('user_id',$request->user_id)->where('follower_user_id',$user->id)->where('status','!=','3')->toSql();
+                    $friends = UserFollowers::where('user_id',$request->user_id)->where('follower_user_id',$user->id)->where('status','!=','3')->get();
                     
                     if(empty($friends)){
                         $friends = UserFollowers::where('user_id',$user->id)->where('follower_user_id',$request->user_id)->where('status','!=','3')->get();
@@ -148,8 +148,6 @@ class UsersController extends Controller
                 }else{
                     $friends = "";
                 }
-
-                dd($friends);
 
                 $data['users'][$key]['id'] = $user->id;
                 $data['users'][$key]['fullname'] = $user->fullname;
