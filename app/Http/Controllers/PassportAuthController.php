@@ -96,8 +96,8 @@ class PassportAuthController extends Controller
                 $token = auth()->user()->createToken('flatmeta')->accessToken;
                 return response()->json(['status' => true, 'access_token' => $token]);
             } else {
-                $data['message'] = "Wrong Email or Password";
-                return response()->json(['status' => false, 'data' => $data]);
+                $returndata['message'] = "Wrong Email or Password";
+                return response()->json(['status' => false, 'data' => $returndata]);
             }
            
         }catch(BadRequestException $e){
