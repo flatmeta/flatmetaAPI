@@ -23,10 +23,13 @@ $router->get('/RemoveUserCart','App\Http\Controllers\CartController@RemoveUserCa
 
 ## User Boxes  ##
 
-$router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
+
 
 
 Route::middleware('auth:api')->group(function () use ($router) {
+
+    $router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
+    
     ## User ##
     $router->get('/getuserbytoken','App\Http\Controllers\UsersController@GetUserDetails');
     $router->post('/UpdateUser','App\Http\Controllers\UsersController@UpdateUser');
