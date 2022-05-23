@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\UserFollowers;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 
@@ -129,13 +130,25 @@ class UsersController extends Controller
 
     }
 
-    public function GetAllUser(){
+    public function GetAllUser(Request $request){
 
         try{
-            
+
+            $userdata = $request->user();
+
             $users = User::all();
 
             foreach($users as $key => $user){
+
+                if(!empty($userdata)){
+                    $friends = UserFollowers::where('user_id',$userdata['id'])->where('follower_user_id',$user->id)->first();
+
+                    if(empty($friends)){
+                        $friends = UserFollowers::where('user_id',$user->id)->where('follower_user_id',$userdata['id'])->first();
+                    }
+                }
+
+                
 
                 $data['users'][$key]['id'] = $user->id;
                 $data['users'][$key]['fullname'] = $user->fullname;
@@ -149,6 +162,12 @@ class UsersController extends Controller
                     $data['users'][$key]['image'] = $userfile_path.$user->image;
                 }
                 
+                if(empty($friends)){
+                    $data['users'][$key]['friends'] = false;
+                }else{
+                    $data['users'][$key]['friends'] = true;
+                }
+
                 $data['users'][$key]['status'] = $user->status;
 
             }
@@ -160,10 +179,6 @@ class UsersController extends Controller
                 return response()->json(['status' => true, 'data' => $data]);
             }
 
-            $data['message'] = "Unsupported Media Type";
-            return response()->json(['status' => false, 'data' => $data]);
-            
-           
         }catch(BadRequestException $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
