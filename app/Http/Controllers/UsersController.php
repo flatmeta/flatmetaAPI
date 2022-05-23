@@ -144,9 +144,9 @@ class UsersController extends Controller
                 $userfile_path = env('APP_URL').'assets/uploads/users/';
 
                 if(empty($user->image)){ 
-                    $data['image'] = $userfile_path.'noimage.png';
+                    $data['users'][$key]['image'] = $userfile_path.'noimage.png';
                 }else{
-                    $data['image'] = $userfile_path.$user->image;
+                    $data['users'][$key]['image'] = $userfile_path.$user->image;
                 }
                 
                 $data['users'][$key]['status'] = $user->status;
