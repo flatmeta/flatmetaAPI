@@ -135,21 +135,17 @@ class UsersController extends Controller
         try{
 
             $userdata = $request->user();
-            dd($userdata);
-
+           
             $users = User::all();
 
             foreach($users as $key => $user){
-
                 if(!empty($userdata)){  
-                    $friends = UserFollowers::where('user_id',$userdata['id'])->where('follower_user_id',$user->id)->first();
+                    $friends = UserFollowers::where('user_id',$request->user_id)->where('follower_user_id',$user->id)->first();
 
                     if(empty($friends)){
-                        $friends = UserFollowers::where('user_id',$user->id)->where('follower_user_id',$userdata['id'])->first();
+                        $friends = UserFollowers::where('user_id',$user->id)->where('follower_user_id',$request->user_id)->first();
                     }
                 }
-
-                dd($friends);                
 
                 $data['users'][$key]['id'] = $user->id;
                 $data['users'][$key]['fullname'] = $user->fullname;

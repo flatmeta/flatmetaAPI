@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 
 $router->post('/login','App\Http\Controllers\PassportAuthController@login');
 $router->post('/register','App\Http\Controllers\PassportAuthController@register');
-$router->get('/GetAllUser','App\Http\Controllers\UsersController@GetAllUser');
+$router->post('/GetAllUser','App\Http\Controllers\UsersController@GetAllUser');
 ## User Boxes  ##
 $router->get('/PurchasedTiles','App\Http\Controllers\UserBoxesController@PurchasedTiles');
 $router->get('/RemoveUserCart','App\Http\Controllers\CartController@RemoveUserCart');
