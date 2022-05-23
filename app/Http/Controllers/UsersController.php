@@ -148,7 +148,7 @@ class UsersController extends Controller
                     }
                 }
 
-                
+                dd($friends);                
 
                 $data['users'][$key]['id'] = $user->id;
                 $data['users'][$key]['fullname'] = $user->fullname;
