@@ -111,7 +111,7 @@ class OrdersController extends Controller
 
         try{ 
 
-            $Orders = Orders::all();
+            $Orders = Orders::GetUserTiles();
             
             if(!empty($Orders)){
 
@@ -120,6 +120,7 @@ class OrdersController extends Controller
                     $tilesdata = UserBoxes::where('order_id', $order->id)->firstOrFail();
                     $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : "https://via.placeholder.com/150"; 
                     $data['tiles'][$key]['user_id'] = $order->user_id;
+                    $data['tiles'][$key]['username'] = $order->username;
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
                     $data['tiles'][$key]['custom_details'] = $order->custom_details;
                     $data['tiles'][$key]['amount'] = $order->amount;

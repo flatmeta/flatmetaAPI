@@ -134,8 +134,6 @@ class UsersController extends Controller
 
         try{
 
-           
-           
             $users = User::all();
 
             foreach($users as $key => $user){
@@ -178,6 +176,18 @@ class UsersController extends Controller
                 return response()->json(['status' => true, 'data' => $data]);
             }
 
+        }catch(BadRequestException $e){
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+
+    }
+
+    public function GetUserTilesByOrderId($id){
+
+        try{
+
+            
+            
         }catch(BadRequestException $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
