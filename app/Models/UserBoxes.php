@@ -15,5 +15,12 @@ class UserBoxes extends Model
         ->leftJoin('orders','orders.id','=','user_boxes.order_id')
         ->get();
     }
+
+    public static function GetUserTilesByOrderId($id)
+    {
+        return self::select('*')
+        ->where('order_id',$id)
+        ->get();
+    }
     
 }

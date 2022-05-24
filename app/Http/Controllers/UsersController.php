@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use App\Models\UserFollowers;
+use App\Models\Orders;
+use App\Models\UserBoxes;
 use Illuminate\Http\Request;
+use App\Models\UserFollowers;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 
 class UsersController extends Controller
@@ -186,7 +188,20 @@ class UsersController extends Controller
 
         try{
 
-            
+            $UserBoxes = UserBoxes::GetUserTilesByOrderId($id);
+
+            foreach($UserBoxes as $key => $order){
+                $data['tiles'][$key]['id'] = $order->id;
+                $data['tiles'][$key]['lat'] = $order->lat;
+                $data['tiles'][$key]['lng'] = $order->lng;
+            }
+
+            if(!empty($data)){
+                return response()->json(['status' => true, 'data' => $data]);
+            }else{
+                $data['tiles'] = array();
+                return response()->json(['status' => true, 'data' => $data]);
+            }
             
         }catch(BadRequestException $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
