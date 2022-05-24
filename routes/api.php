@@ -21,7 +21,7 @@ $router->post('/GetAllUser','App\Http\Controllers\UsersController@GetAllUser');
 $router->get('/PurchasedTiles','App\Http\Controllers\UserBoxesController@PurchasedTiles');
 $router->get('/RemoveUserCart','App\Http\Controllers\CartController@RemoveUserCart');
 
-$router->post('/GetUserTilesByOrderId/{id}','App\Http\Controllers\UsersController@GetUserTilesByOrderId');
+$router->get('/GetUserTilesByOrderId/{id}','App\Http\Controllers\UsersController@GetUserTilesByOrderId');
 
 ## User Boxes  ##
 
