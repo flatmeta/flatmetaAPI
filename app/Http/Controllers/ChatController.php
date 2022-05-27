@@ -52,7 +52,7 @@ class ChatController extends Controller
                 foreach($messages as $key => $message){
                     $data['messages'][$key]['id']           = $message->id;
                     $data['messages'][$key]['room_id']      = $message->room_id;
-                    $data['messages'][$key]['sender_id']    = $message->sernder_id;
+                    $data['messages'][$key]['sender_id']    = $message->sender_id;
                     $data['messages'][$key]['message']      = $message->message;
                     $data['messages'][$key]['created_at']   = $message->created_at;
                 }
