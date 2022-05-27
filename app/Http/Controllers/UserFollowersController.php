@@ -135,5 +135,33 @@ class UserFollowersController extends Controller
         if (!$full) $string = array_slice($string, 0, 1);
         return $string ? implode(', ', $string) . ' ago' : 'just now';
     }
+
+    public function GetRoomId(Request $request){
+
+        $userdata = $request->user();
+
+        try{ 
+            $friendrequests = UserFollowers::where('follower_user_id',$userdata['id'])->where('user_id',$request->follower_user_id)->get();
+
+            if(empty($friendrequests)){
+
+                $friendrequests = UserFollowers::where('user_id',$userdata['id'])->where('follower_user_id',$request->follower_user_id)->get();
+
+                dd($friendrequests);
+            }else{
+                dd($friendrequests);
+            }
+
+            if(!empty($data)){
+                return response()->json(['status' => true, 'data' => $data]);
+            }else{
+                $data['requests'] = array();
+                return response()->json(['status' => true, 'data' => $data]);
+            }
+
+        }catch(\Exception $e){
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+    }
     
 }
