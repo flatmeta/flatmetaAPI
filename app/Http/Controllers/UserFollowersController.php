@@ -147,18 +147,18 @@ class UserFollowersController extends Controller
 
                 $friendrequests = UserFollowers::where('user_id',$userdata['id'])->where('follower_user_id',$request->follower_user_id)->first();
 
-                dd($friendrequests);
+                if($friendrequests['status'] == "1"){
+                    $data['room_id'] = $friendrequests['id'];
+                    return response()->json(['status' => true, 'data' => $data]);
+                }
+                
             }else{
-                dd($friendrequests);
+                if($friendrequests['status'] == "1"){
+                    $data['room_id'] = $friendrequests['id'];
+                    return response()->json(['status' => true, 'data' => $data]);
+                }
             }
-
-            if(!empty($data)){
-                return response()->json(['status' => true, 'data' => $data]);
-            }else{
-                $data['requests'] = array();
-                return response()->json(['status' => true, 'data' => $data]);
-            }
-
+           
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
