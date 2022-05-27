@@ -141,11 +141,11 @@ class UserFollowersController extends Controller
         $userdata = $request->user();
 
         try{ 
-            $friendrequests = UserFollowers::where('follower_user_id',$userdata['id'])->where('user_id',$request->follower_user_id)->get();
+            $friendrequests = UserFollowers::where('follower_user_id',$userdata['id'])->where('user_id',$request->follower_user_id)->first();
 
             if(empty($friendrequests)){
 
-                $friendrequests = UserFollowers::where('user_id',$userdata['id'])->where('follower_user_id',$request->follower_user_id)->get();
+                $friendrequests = UserFollowers::where('user_id',$userdata['id'])->where('follower_user_id',$request->follower_user_id)->first();
 
                 dd($friendrequests);
             }else{
