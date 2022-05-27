@@ -64,6 +64,8 @@ Route::middleware('auth:api')->group(function () use ($router) {
     $router->post('/SendFriendRequest','App\Http\Controllers\UserFollowersController@SendFriendRequest');
     $router->get('/GetAllFriendRequest','App\Http\Controllers\UserFollowersController@GetAllFriendRequest');
     $router->post('/UpdateFriendRequestStatus','App\Http\Controllers\UserFollowersController@UpdateFriendRequestStatus');
+    $router->post('/GetRoomId','App\Http\Controllers\UserFollowersController@GetRoomId');
+    
     ## User Followers  ##
 });
 
