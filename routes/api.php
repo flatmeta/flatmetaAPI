@@ -66,7 +66,10 @@ Route::middleware('auth:api')->group(function () use ($router) {
     $router->post('/UpdateFriendRequestStatus','App\Http\Controllers\UserFollowersController@UpdateFriendRequestStatus');
     $router->post('/GetRoomId','App\Http\Controllers\UserFollowersController@GetRoomId');
     
-    ## User Followers  ##
+    ## Chat Controller  ##
+    $router->post('/AddNewMessaage','App\Http\Controllers\ChatController@AddNewMessaage');
+    $router->get('/GetAllMessagesByRoomId/{id}','App\Http\Controllers\ChatController@GetAllMessagesByRoomId');
+    
 });
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
