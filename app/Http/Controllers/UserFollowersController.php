@@ -150,11 +150,17 @@ class UserFollowersController extends Controller
                 if($friendrequests['status'] == "1"){
                     $data['room_id'] = $friendrequests['id'];
                     return response()->json(['status' => true, 'data' => $data]);
+                }else{
+                    $data['room_id'] = "";
+                    return response()->json(['status' => true, 'data' => $data]);
                 }
                 
             }else{
                 if($friendrequests['status'] == "1"){
                     $data['room_id'] = $friendrequests['id'];
+                    return response()->json(['status' => true, 'data' => $data]);
+                }else{
+                    $data['room_id'] = "";
                     return response()->json(['status' => true, 'data' => $data]);
                 }
             }
