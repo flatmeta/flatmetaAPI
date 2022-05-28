@@ -14,15 +14,21 @@ class ChatController extends Controller
 
         try{ 
 
+            $room_id    = $request->roomId;
+            $sender_id  = $request->senderId;
+            $message    = $request->message;
+            $created_at    = $request->createdAt;
+
             //Validate Fields
-            if(empty($request->room_id) OR empty($request->sender_id)  OR empty($request->message)){
+            if(empty($room_id) OR empty($sender_id)  OR empty($message)){
                 return response()->json(['status' => false, 'message' => 'You must fill all the fields']);
             }
             
             $Chat = new Chat();    
-            $Chat->room_id          = $request->room_id;
-            $Chat->sender_id        = $request->sender_id;
-            $Chat->message          = $request->message;
+            $Chat->room_id          = $room_id;
+            $Chat->sender_id        = $sender_id;
+            $Chat->message          = $message;
+            $Chat->created_at       = $created_at;
            
             if($Chat->save()){
                 $data['message']  = "Message added successfully.";

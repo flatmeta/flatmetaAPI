@@ -26,19 +26,15 @@ $router->get('/GetUserTilesByOrderId/{id}','App\Http\Controllers\UsersController
 ## User Boxes  ##
 
 $router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
-
+$router->post('/AddNewMessaage','App\Http\Controllers\ChatController@AddNewMessaage');
 
 Route::middleware('auth:api')->group(function () use ($router) {
-
-    
 
     ## User ##
     $router->get('/getuserbytoken','App\Http\Controllers\UsersController@GetUserDetails');
     $router->post('/UpdateUser','App\Http\Controllers\UsersController@UpdateUser');
     $router->post('/UploadUserImage','App\Http\Controllers\UsersController@UploadUserImage');
 
-   
-    
     ## User ##
 
     ## Cart ##
@@ -67,7 +63,7 @@ Route::middleware('auth:api')->group(function () use ($router) {
     $router->post('/GetRoomId','App\Http\Controllers\UserFollowersController@GetRoomId');
     
     ## Chat Controller  ##
-    $router->post('/AddNewMessaage','App\Http\Controllers\ChatController@AddNewMessaage');
+    
     $router->get('/GetAllMessagesByRoomId/{id}','App\Http\Controllers\ChatController@GetAllMessagesByRoomId');
     
 });
