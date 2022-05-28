@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use DateTime;
+use App\Models\Chat;
 use App\Models\User;
 use Illuminate\Http\Request;
 use App\Models\UserFollowers;
@@ -149,18 +150,49 @@ class UserFollowersController extends Controller
 
                 if($friendrequests['status'] == "1"){
                     $data['room_id'] = $friendrequests['id'];
+
+                    $messages = Chat::where('room_id',$friendrequests['id'])->get();
+                    if(!empty($messages)){
+                        foreach($messages as $key => $message){
+                            $data['messages'][$key]['id']           = $message->id;
+                            $data['messages'][$key]['room_id']      = $message->room_id;
+                            $data['messages'][$key]['sender_id']    = $message->sender_id;
+                            $data['messages'][$key]['message']      = $message->message;
+                            $data['messages'][$key]['created_at']   = $this->time_elapsed_string($message->created_at); ;
+                        }
+                    }else{
+                        $data['messages'] = array();
+                    }
+
                     return response()->json(['status' => true, 'data' => $data]);
                 }else{
                     $data['room_id'] = "";
+                    $data['messages'] = array();
                     return response()->json(['status' => true, 'data' => $data]);
                 }
                 
             }else{
                 if($friendrequests['status'] == "1"){
                     $data['room_id'] = $friendrequests['id'];
+
+                    $messages = Chat::where('room_id',$friendrequests['id'])->get();
+
+                    if(!empty($messages)){
+                        foreach($messages as $key => $message){
+                            $data['messages'][$key]['id']           = $message->id;
+                            $data['messages'][$key]['room_id']      = $message->room_id;
+                            $data['messages'][$key]['sender_id']    = $message->sender_id;
+                            $data['messages'][$key]['message']      = $message->message;
+                            $data['messages'][$key]['created_at']   = $this->time_elapsed_string($message->created_at); ;
+                        }
+                    }else{
+                        $data['messages'] = array();
+                    }
+
                     return response()->json(['status' => true, 'data' => $data]);
                 }else{
                     $data['room_id'] = "";
+                    $data['messages'] = array();
                     return response()->json(['status' => true, 'data' => $data]);
                 }
             }
