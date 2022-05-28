@@ -155,10 +155,10 @@ class UserFollowersController extends Controller
                     if(!empty($messages)){
                         foreach($messages as $key => $message){
                             $data['messages'][$key]['id']           = $message->id;
-                            $data['messages'][$key]['room_id']      = $message->room_id;
-                            $data['messages'][$key]['sender_id']    = $message->sender_id;
+                            $data['messages'][$key]['roomId']      = $message->room_id;
+                            $data['messages'][$key]['senderId']    = $message->sender_id;
                             $data['messages'][$key]['message']      = $message->message;
-                            $data['messages'][$key]['created_at']   = $message->created_at;
+                            $data['messages'][$key]['createdAt']   = $message->created_at;
                         }
                     }else{
                         $data['messages'] = array();
@@ -180,10 +180,10 @@ class UserFollowersController extends Controller
                     if(!empty($messages)){
                         foreach($messages as $key => $message){
                             $data['messages'][$key]['id']           = $message->id;
-                            $data['messages'][$key]['room_id']      = $message->room_id;
-                            $data['messages'][$key]['sender_id']    = $message->sender_id;
+                            $data['messages'][$key]['roomId']      = $message->room_id;
+                            $data['messages'][$key]['senderId']    = $message->sender_id;
                             $data['messages'][$key]['message']      = $message->message;
-                            $data['messages'][$key]['created_at']   = $message->created_at ;
+                            $data['messages'][$key]['createdAt']   = $message->created_at ;
                         }
                     }else{
                         $data['messages'] = array();
