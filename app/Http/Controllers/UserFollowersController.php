@@ -158,7 +158,7 @@ class UserFollowersController extends Controller
                             $data['messages'][$key]['room_id']      = $message->room_id;
                             $data['messages'][$key]['sender_id']    = $message->sender_id;
                             $data['messages'][$key]['message']      = $message->message;
-                            $data['messages'][$key]['created_at']   = $this->time_elapsed_string($message->created_at); ;
+                            $data['messages'][$key]['created_at']   = $message->created_at;
                         }
                     }else{
                         $data['messages'] = array();
@@ -183,7 +183,7 @@ class UserFollowersController extends Controller
                             $data['messages'][$key]['room_id']      = $message->room_id;
                             $data['messages'][$key]['sender_id']    = $message->sender_id;
                             $data['messages'][$key]['message']      = $message->message;
-                            $data['messages'][$key]['created_at']   = $this->time_elapsed_string($message->created_at); ;
+                            $data['messages'][$key]['created_at']   = $message->created_at ;
                         }
                     }else{
                         $data['messages'] = array();
