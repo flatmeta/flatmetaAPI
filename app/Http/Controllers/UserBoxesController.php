@@ -18,7 +18,7 @@ class UserBoxesController extends Controller
             if($tilesData->isNotEmpty()){
                 foreach($tilesData as $key => $tiles){
                     $data['tiles'][$key]['user_id']	    = $tiles->user_id;
-                    $data['tiles'][$key]['username']	= $tiles->username;
+                    $data['tiles'][$key]['full_name']	= $tiles->full_name;
                     $data['tiles'][$key]['order_id']	= $tiles->order_id;
                     $data['tiles'][$key]['lat']	        = $tiles->lat;
                     $data['tiles'][$key]['lng']	        = $tiles->lng;

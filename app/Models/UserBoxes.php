@@ -11,7 +11,7 @@ class UserBoxes extends Model
 
     public static function GetUserTiles()
     {
-        return self::select('user_boxes.*','orders.custom_details','orders.user_id','users.username')
+        return self::select('user_boxes.*','orders.custom_details','orders.user_id','users.full_name')
         ->leftJoin('orders','orders.id','=','user_boxes.order_id')
         ->leftJoin('users','users.id','=','orders.user_id')
         ->get();
