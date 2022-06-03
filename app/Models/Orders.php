@@ -15,4 +15,12 @@ class Orders extends Model
         ->leftJoin('users','orders.user_id','=','users.id')
         ->get();
     }
+
+    public static function GetUserTilesByID($id)
+    {
+        return self::select('orders.*','users.username')
+        ->leftJoin('users','orders.user_id','=','users.id')
+        ->where('users',"=",$id)
+        ->get();
+    }
 }

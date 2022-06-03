@@ -27,6 +27,7 @@ $router->get('/GetUserTilesByOrderId/{id}','App\Http\Controllers\UsersController
 
 $router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
 $router->post('/AddNewMessaage','App\Http\Controllers\ChatController@AddNewMessaage');
+$router->get('/SaleList','App\Http\Controllers\OrdersController@SaleList');
 
 Route::middleware('auth:api')->group(function () use ($router) {
 
@@ -48,7 +49,10 @@ Route::middleware('auth:api')->group(function () use ($router) {
     $router->get('/BuyNow','App\Http\Controllers\OrdersController@BuyNow');
     $router->post('/UpdateCustomDetails','App\Http\Controllers\OrdersController@UpdateCustomDetails');
     $router->post('/UpdateSalePrice','App\Http\Controllers\OrdersController@UpdateSalePrice');
-    $router->get('/SaleList','App\Http\Controllers\OrdersController@SaleList');
+    
+
+    $router->get('/MyPlaces','App\Http\Controllers\OrdersController@MyPlaces');
+
     ## Order ##
 
     ## User Boxes  ##

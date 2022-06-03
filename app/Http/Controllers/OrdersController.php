@@ -138,5 +138,39 @@ class OrdersController extends Controller
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
     }
+
+    public function MyPlaces(Request $request){
+
+        try{ 
+
+            $userdata = $request->user();
+
+            $Orders = Orders::GetUserTilesByID($userdata['id']);
+            
+            if(!empty($Orders)){
+
+                foreach($Orders as $key => $order){
+                    $data['tiles'][$key]['id'] = $order->id;
+                    $tilesdata = UserBoxes::where('order_id', $order->id)->firstOrFail();
+                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : "https://via.placeholder.com/150"; 
+                    $data['tiles'][$key]['user_id'] = $order->user_id;
+                    $data['tiles'][$key]['username'] = $order->username;
+                    $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
+                    $data['tiles'][$key]['custom_details'] = $order->custom_details;
+                    $data['tiles'][$key]['amount'] = $order->amount;
+                }
+
+                if(!empty($data)){
+                    return response()->json(['status' => true, 'data' => $data]);
+                }else{
+                    $data['tiles'] = array();
+                    return response()->json(['status' => true, 'data' => $data]);
+                }
+            }
+
+        }catch(\Exception $e){
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+    }
     
 }
