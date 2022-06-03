@@ -160,6 +160,8 @@ class UsersController extends Controller
                 }else{
                     $data['users'][$key]['image'] = $userfile_path.$user->image;
                 }
+
+                dd($friends);
                 
                 if(empty($friends)){
                     $data['users'][$key]['friends'] = false;
