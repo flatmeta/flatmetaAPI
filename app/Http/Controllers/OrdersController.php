@@ -168,6 +168,12 @@ class OrdersController extends Controller
                     $data['tiles'][$key]['custom_details'] = $order->custom_details;
                     $data['tiles'][$key]['amount'] = $order->amount;
                     $data['tiles'][$key]['sale_price'] = $order->sale_price;
+                    if($order->on_sale == "1"){
+                        $data['tiles'][$key]['on_sale'] = true;
+                    }else{
+                        $data['tiles'][$key]['on_sale'] = false;
+                    }
+
                 }
 
                 if(!empty($data)){
