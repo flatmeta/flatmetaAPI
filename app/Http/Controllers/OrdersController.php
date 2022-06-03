@@ -37,6 +37,7 @@ class OrdersController extends Controller
                         $UserBoxes->lng       = $tile['lng'];
                         $UserBoxes->price     = "0.1";
 
+                        
                         $UserBoxes->save();
 
                     }
@@ -93,6 +94,13 @@ class OrdersController extends Controller
             if(!empty($Orders)){
                 if($Orders->user_id == $userdata['id']){
                     $Orders->sale_price  = $sale_price;
+
+                    if($request->on_sale == true){
+                        $Orders->on_sale  = "1";
+                    }else{
+                        $Orders->on_sale  = "0";
+                    }
+
                     $Orders->save();
                     $data['message'] = "Sale price successfully updated.";
                     return response()->json(['status' => true, 'data' => $data]);
