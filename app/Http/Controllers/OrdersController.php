@@ -124,6 +124,7 @@ class OrdersController extends Controller
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
                     $data['tiles'][$key]['custom_details'] = $order->custom_details;
                     $data['tiles'][$key]['amount'] = $order->amount;
+                    $data['tiles'][$key]['sale_price'] = $order->sale_price;
                 }
 
                 if(!empty($data)){
@@ -158,6 +159,7 @@ class OrdersController extends Controller
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
                     $data['tiles'][$key]['custom_details'] = $order->custom_details;
                     $data['tiles'][$key]['amount'] = $order->amount;
+                    $data['tiles'][$key]['sale_price'] = $order->sale_price;
                 }
 
                 if(!empty($data)){
