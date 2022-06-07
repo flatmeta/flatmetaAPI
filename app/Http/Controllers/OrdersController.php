@@ -7,6 +7,7 @@ use App\Models\Cart;
 use App\Models\Orders;
 use App\Models\UserBoxes;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class OrdersController extends Controller
 {
@@ -191,22 +192,41 @@ class OrdersController extends Controller
     }
 
     public function PurchaseTile(){
-        $data = [
-            "plan_id" => "P-2J566761L44918742MKPRPLY",
-            "quantity" => "10",
-            "start_time" => Carbon::now()->addSeconds(10),
-            "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
-            'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
-                'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
-                    array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
-                'return_url' => '' ,
-                'cancel_url' => '' )
-        ];
 
-        $paypal = new PaypalController();
-        $subscribe = $paypal->subscribe($data);
+        DB::beginTransaction();
+        try {
+        
+            $data = [
+                "plan_id" => "P-2J566761L44918742MKPRPLY",
+                "quantity" => "10",
+                "start_time" => Carbon::now()->addSeconds(10),
+                "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
+                'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
+                    'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
+                        array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
+                    'return_url' => '' ,
+                    'cancel_url' => '' )
+            ];
 
-        print_r($subscribe);
+            $paypal = new PaypalController();
+            $subscribe = $paypal->subscribe($data);
+            try {
+                if (!isset($subscribe->debug_id)) {
+                    foreach ($subscribe->links as $link) {
+                        if ($link->rel == 'approve') {
+                            return redirect($link->href);
+                        }
+                    }
+                    echo 'Your Subscription is now active.';
+                }
+            } catch (\Exception $e) {
+                echo'Something goes wrong';
+            }
+            return redirect()->route('dashboard');
+        } catch (\Exception $e) {
+            
+            echo 'Something goes wrong'.$e;
+        }
        
     }
 
