@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Models\Cart;
 use App\Models\Orders;
 use App\Models\UserBoxes;
@@ -187,6 +188,25 @@ class OrdersController extends Controller
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
+    }
+
+    public function PurchaseTile(){
+        $data = [
+            "plan_id" => "P-1G766395YH0963631MKLR5GI",
+            "quantity" => "10",
+            "start_time" => Carbon::now()->addSeconds(10),
+            "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
+            'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
+                'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
+                    array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
+                'return_url' => '' . url('home/approve/'. '1') . '',
+                'cancel_url' => '' . route('tryforfree') . '')
+        ];
+
+        $paypal = new PaypalController();
+        $subscribe = $paypal->subscribe($data);
+
+        print_r($subscribe);
     }
     
 }
