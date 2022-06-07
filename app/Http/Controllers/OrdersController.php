@@ -291,7 +291,7 @@ class OrdersController extends Controller
     public function GetPlanById(){
         
         $paypal = new PaypalController();
-        $package = $paypal->activate_plan('P-1G766395YH0963631MKLR5GI');
+        $package = $paypal->activate_plan('P-2J566761L44918742MKPRPLY');
 
         print_r($package);
     }
