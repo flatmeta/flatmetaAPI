@@ -204,7 +204,10 @@ class OrdersController extends Controller
         ];
 
         $paypal = new PaypalController();
-        $subscribe = $paypal->subscribe($data);
+       // $subscribe = $paypal->subscribe($data);
+
+        $paypal = new PaypalController();
+        $subscribe = $paypal->get_plan('P-1G766395YH0963631MKLR5GI');
 
         print_r($subscribe);
     }
