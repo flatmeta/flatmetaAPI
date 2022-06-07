@@ -198,14 +198,14 @@ class OrdersController extends Controller
         
             $data = [
                 "plan_id" => env('PLAN_ID'),
-                "quantity" => "50",
+                "quantity" => "600",
                 "start_time" => Carbon::now()->addSeconds(10),
                 "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
                 'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
                     'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
                         array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
-                    'return_url' => '' ,
-                    'cancel_url' => '' )
+                    'return_url' => '' . url('TransactionCompleted/'. '1') . '',
+                    'cancel_url' => '' . url('TransactionCancel/'. '1') . '' )
             ];
 
             $paypal = new PaypalController();
@@ -217,12 +217,11 @@ class OrdersController extends Controller
                             return redirect($link->href);
                         }
                     }
-                    echo 'Your Subscription is now active.';
+                    
                 }
             } catch (\Exception $e) {
-                echo'Something goes wrong';
+                
             }
-            return redirect()->route('dashboard');
         } catch (\Exception $e) {
             
             echo 'Something goes wrong'.$e;
@@ -310,6 +309,36 @@ class OrdersController extends Controller
         $package = $paypal->get_subscription('I-SSC00C6JNJGE');
 
         print_r($package);
+    }
+
+    public function TransactionCompleted(Request $request,$id){
+        
+        $Orders = Orders::findorFail($id);
+            
+            if(!empty($Orders)){
+               
+                $Orders->log  = "hellow";
+
+                $Orders->save();
+                $data['message'] = "Transaction Completed Successfully.";
+                return response()->json(['status' => true, 'data' => $data]);
+            }
+
+    }
+
+    public function TransactionCancel(Request $request,$id){
+        
+        $Orders = Orders::findorFail($id);
+            
+            if(!empty($Orders)){
+               
+                $Orders->log  = "hellow";
+
+                $Orders->save();
+                $data['message'] = "Transaction Cancel. Please Try Again.";
+                return response()->json(['status' => true, 'data' => $data]);
+            }
+
     }
 
     
