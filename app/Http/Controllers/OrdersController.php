@@ -195,7 +195,6 @@ class OrdersController extends Controller
 
         DB::beginTransaction();
         try {
-        
             $data = [
                 "plan_id" => env('PLAN_ID'),
                 "quantity" => "600",
@@ -217,7 +216,6 @@ class OrdersController extends Controller
                             return redirect($link->href);
                         }
                     }
-                    
                 }
             } catch (\Exception $e) {
                 
@@ -312,6 +310,9 @@ class OrdersController extends Controller
     }
 
     public function TransactionCompleted(Request $request,$id){
+
+        dd($request);
+        exit;
         
         $Orders = Orders::findorFail($id);
             
