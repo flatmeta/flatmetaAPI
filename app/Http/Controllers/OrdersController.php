@@ -205,6 +205,8 @@ class OrdersController extends Controller
 
         $paypal = new PaypalController();
         $subscribe = $paypal->subscribe($data);
+
+        print_r($subscribe);
        
     }
 
