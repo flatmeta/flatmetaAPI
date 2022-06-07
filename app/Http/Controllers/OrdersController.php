@@ -207,17 +207,37 @@ class OrdersController extends Controller
        // $subscribe = $paypal->subscribe($data);
 
        $data = [
-             "name" => "Flatmeta.io",
-             "type" => "SERVICE",
-             "description" => "flatmeta provides the land in a virtual world where u can buy and sale your land",
-             "category" => "SERVICES",
-             "home_url" => env('APP_URL'),
+            'product_id' => "PROD-25832511MH708641X",
+            'name' => "Flatmeta Plan",
+            'quantity_supported' => true,
+            'description' => "flatmeta provides the land in a virtual world where u can buy and sale your land"
         ];
 
+        $data['billing_cycles'][] = [
+            'frequency' => array('interval_unit' => "MONTH", 'interval_count' => 1),
+            'tenure_type' => 'REGULAR',
+            'sequence' =>  1,
+            'total_cycles' => 12,
+            "pricing_scheme" => array(
+                "fixed_price" => array(
+                    "value" => "0.01",
+                    "currency_code" => "USD"
+                )),
+        ];
+        $data['payment_preferences'] = [
+            'auto_bill_outstanding' => true,
+            'setup_fee' => array('value' => '0', 'currency_code' => 'USD'),
+            'setup_fee_failure_action' => 'CONTINUE',
+            'payment_failure_threshold' => 3
+        ];
+        $data['taxes'] = [
+            'percentage' => '0',
+            'inclusive' => true
+        ];
         $paypal = new PaypalController();
-        $subscribe = $paypal->make_product($data);
+        $package = $paypal->make_package($data);
 
-        print_r($subscribe);
+        print_r($package);
     }
     
 }
