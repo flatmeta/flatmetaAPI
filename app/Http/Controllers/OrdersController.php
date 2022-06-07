@@ -209,8 +209,8 @@ class OrdersController extends Controller
     //    $data = [
     //          "name" => "Flatmeta.io",
     //          "type" => "10",
-    //          "description" => Carbon::now()->addSeconds(10),
-    //          "category" => "P-1G766395YH0963631MKLR5GI",
+    //          "description" => "flatmeta provides the land in a virtual world where u can buy and sale your land",
+    //          "category" => "Digital goods",
     //          "image_url" => "10",
     //          "home_url" => Carbon::now()->addSeconds(10),
     //     ];
