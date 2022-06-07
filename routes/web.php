@@ -17,6 +17,9 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+
+Route::any('/CreateProd', 'App\Http\Controllers\OrdersController@CreateProd');
+Route::any('/CreatePlan', 'App\Http\Controllers\OrdersController@CreatePlan');
 Route::any('/PurchaseTile', 'App\Http\Controllers\OrdersController@PurchaseTile');
 Route::any('/GetProdById', 'App\Http\Controllers\OrdersController@GetProdById');
 Route::any('/GetPlanById', 'App\Http\Controllers\OrdersController@GetPlanById');
