@@ -196,8 +196,6 @@ class PaypalController extends Controller
     public function get_product($id)
     {
 
-        dd($this->token);
-
         $curl = curl_init();
 
         curl_setopt_array($curl, array(
