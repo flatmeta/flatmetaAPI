@@ -206,7 +206,26 @@ class OrdersController extends Controller
         // $paypal = new PaypalController();
        // $subscribe = $paypal->subscribe($data);
 
-       $data = [
+       
+    }
+
+    public function CreateProd(){
+        $data = [
+            "name" => "Flatmeta.io",
+            "type" => "SERVICE",
+            "description" => "flatmeta provides the land in a virtual world where u can buy and sale your land",
+            "category" => "SERVICES",
+            "home_url" => env('APP_URL'),
+        ];
+
+       $paypal = new PaypalController();
+       $subscribe = $paypal->make_product($data);
+
+       print_r($subscribe);
+    }
+
+    public function CreatePlan(){
+        $data = [
             'product_id' => "PROD-25832511MH708641X",
             'name' => "Flatmeta Plan",
             'quantity_supported' => true,
@@ -236,6 +255,22 @@ class OrdersController extends Controller
         ];
         $paypal = new PaypalController();
         $package = $paypal->make_package($data);
+
+        print_r($package);
+    }
+
+    public function GetProdById(){
+        
+        $paypal = new PaypalController();
+        $package = $paypal->get_product('PROD-25832511MH708641X');
+
+        print_r($package);
+    }
+
+    public function GetPlanById(){
+        
+        $paypal = new PaypalController();
+        $package = $paypal->get_product('P-2J566761L44918742MKPRPLY');
 
         print_r($package);
     }

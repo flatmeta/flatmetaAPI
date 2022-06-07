@@ -18,3 +18,5 @@ Route::get('/', function () {
 });
 
 Route::any('/PurchaseTile', 'App\Http\Controllers\OrdersController@PurchaseTile');
+Route::any('/GetProdById', 'App\Http\Controllers\OrdersController@GetProdById');
+Route::any('/GetPlanById', 'App\Http\Controllers\OrdersController@GetPlanById');
