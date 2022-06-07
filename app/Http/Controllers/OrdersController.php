@@ -311,19 +311,22 @@ class OrdersController extends Controller
 
     public function TransactionCompleted(Request $request,$id){
 
-        dd($request['subscription_id']);
-        exit;
-        
-        $Orders = Orders::findorFail($id);
-            
-            if(!empty($Orders)){
-               
-                $Orders->log  = $request;
+        if(!empty($request['subscription_id'])){
+            $paypal = new PaypalController();
+            $subscription_response = $paypal->get_subscription($request['subscription_id']);
+
+            if($subscription_response->status == 'ACTIVE'){
+                $Orders = Orders::findorFail($id);
+                $Orders->status  = "1";
+                $Orders->subscription_id  = $request['subscription_id'];
+                $Orders->log  = json_encode($subscription_response);
 
                 $Orders->save();
+
                 $data['message'] = "Transaction Completed Successfully.";
                 return response()->json(['status' => true, 'data' => $data]);
             }
+        }
 
     }
 
@@ -333,9 +336,10 @@ class OrdersController extends Controller
             
             if(!empty($Orders)){
                
-                $Orders->log  = "hellow";
-
+                $Orders = Orders::findorFail($id);
+                $Orders->status  = "2";
                 $Orders->save();
+
                 $data['message'] = "Transaction Cancel. Please Try Again.";
                 return response()->json(['status' => true, 'data' => $data]);
             }
