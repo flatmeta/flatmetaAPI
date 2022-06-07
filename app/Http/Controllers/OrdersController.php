@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use App\Models\Cart;
 use App\Models\Orders;
+use App\Models\User;
 use App\Models\UserBoxes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +45,8 @@ class OrdersController extends Controller
 
                     }
 
+                    $data['id'] = $order->id;
+                    $data['url'] = url('PurchaseTile/'. $order->id);
                     $data['message'] = "Tiles purchased successfully.";
                     return response()->json(['status' => true, 'data' => $data]);
                 }else{
@@ -191,7 +194,10 @@ class OrdersController extends Controller
         }
     }
 
-    public function PurchaseTile(){
+    public function PurchaseTile($id){
+
+        $Orders = Orders::findorFail($id);
+        $User = User::findorFail($Orders->user_id);
 
         DB::beginTransaction();
         try {
@@ -199,12 +205,12 @@ class OrdersController extends Controller
                 "plan_id" => env('PLAN_ID'),
                 "quantity" => "600",
                 "start_time" => Carbon::now()->addSeconds(10),
-                "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
+                "subscriber" => array('name' => array('given_name' => $User->fullname, 'surname' => $User->suername), 'email_address' => $User->email),
                 'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
                     'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
                         array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
-                    'return_url' => '' . url('TransactionCompleted/'. '1') . '',
-                    'cancel_url' => '' . url('TransactionCancel/'. '1') . '' )
+                    'return_url' => '' . url('TransactionCompleted/'. $id) . '',
+                    'cancel_url' => '' . url('TransactionCancel/'. $id) . '' )
             ];
 
             $paypal = new PaypalController();
