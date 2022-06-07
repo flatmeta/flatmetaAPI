@@ -199,8 +199,8 @@ class OrdersController extends Controller
             'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
                 'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
                     array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
-                'return_url' => '' . url('home/approve/'. '1') . '',
-                'cancel_url' => '' . route('tryforfree') . '')
+                'return_url' => '' ,
+                'cancel_url' => '' )
         ];
 
         $paypal = new PaypalController();
