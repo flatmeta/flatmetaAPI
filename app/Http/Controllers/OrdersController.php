@@ -206,8 +206,18 @@ class OrdersController extends Controller
         // $paypal = new PaypalController();
        // $subscribe = $paypal->subscribe($data);
 
+    //    $data = [
+    //          "name" => "Flatmeta.io",
+    //          "type" => "10",
+    //          "description" => Carbon::now()->addSeconds(10),
+    //          "category" => "P-1G766395YH0963631MKLR5GI",
+    //          "image_url" => "10",
+    //          "home_url" => Carbon::now()->addSeconds(10),
+    //     ];
+
+
         $paypal = new PaypalController();
-        $subscribe = $paypal->get_all_product();
+        $subscribe = $paypal->get_product('PROD-2TG59046BV006321W');
 
         print_r($subscribe);
     }
