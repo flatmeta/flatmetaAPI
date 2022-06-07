@@ -197,7 +197,7 @@ class OrdersController extends Controller
         try {
         
             $data = [
-                "plan_id" => "P-2J566761L44918742MKPRPLY",
+                "plan_id" => env('PLAN_ID'),
                 "quantity" => "50",
                 "start_time" => Carbon::now()->addSeconds(10),
                 "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
@@ -283,7 +283,7 @@ class OrdersController extends Controller
     public function GetProdById(){
         
         $paypal = new PaypalController();
-        $package = $paypal->get_product('PROD-0ED43758V69990912');
+        $package = $paypal->get_product('PROD-6U229780257548608');
 
         print_r($package);
     }
@@ -291,7 +291,7 @@ class OrdersController extends Controller
     public function GetPlanById(){
         
         $paypal = new PaypalController();
-        $package = $paypal->get_plan('P-2J566761L44918742MKPRPLY');
+        $package = $paypal->get_plan('P-4V708803SV048851WMKPTV3A');
 
         print_r($package);
     }
