@@ -295,5 +295,13 @@ class OrdersController extends Controller
 
         print_r($package);
     }
+
+    public function GetAllProducts(){
+        
+        $paypal = new PaypalController();
+        $package = $paypal->get_all_product();
+
+        print_r($package);
+    }
     
 }
