@@ -311,7 +311,7 @@ class OrdersController extends Controller
 
     public function TransactionCompleted(Request $request,$id){
 
-        dd($request);
+        dd($request['subscription_id']);
         exit;
         
         $Orders = Orders::findorFail($id);
