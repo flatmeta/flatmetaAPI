@@ -22,3 +22,5 @@ Route::any('/GetProdById', 'App\Http\Controllers\OrdersController@GetProdById');
 Route::any('/GetPlanById', 'App\Http\Controllers\OrdersController@GetPlanById');
 Route::any('/GetAllProducts', 'App\Http\Controllers\OrdersController@GetAllProducts');
 
+Route::any('/GetSubscriptionsDetails', 'App\Http\Controllers\OrdersController@GetSubscriptionsDetails');
+

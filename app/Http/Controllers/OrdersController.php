@@ -303,5 +303,15 @@ class OrdersController extends Controller
 
         print_r($package);
     }
+
+    public function GetSubscriptionsDetails(){
+        
+        $paypal = new PaypalController();
+        $package = $paypal->get_subscription('I-SSC00C6JNJGE');
+
+        print_r($package);
+    }
+
+    
     
 }
