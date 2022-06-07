@@ -283,7 +283,7 @@ class OrdersController extends Controller
     public function GetProdById(){
         
         $paypal = new PaypalController();
-        $package = $paypal->get_product('PROD-25832511MH708641X');
+        $package = $paypal->get_product('PROD-0ED43758V69990912');
 
         print_r($package);
     }
