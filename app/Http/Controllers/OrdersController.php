@@ -247,7 +247,7 @@ class OrdersController extends Controller
 
     public function CreatePlan(){
         $data = [
-            'product_id' => "PROD-25832511MH708641X",
+            'product_id' => "PROD-6U229780257548608",
             'name' => "Flatmeta Plan",
             'quantity_supported' => true,
             'description' => "flatmeta provides the land in a virtual world where u can buy and sale your land"
