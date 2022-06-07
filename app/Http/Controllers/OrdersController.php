@@ -206,18 +206,16 @@ class OrdersController extends Controller
         // $paypal = new PaypalController();
        // $subscribe = $paypal->subscribe($data);
 
-    //    $data = [
-    //          "name" => "Flatmeta.io",
-    //          "type" => "10",
-    //          "description" => "flatmeta provides the land in a virtual world where u can buy and sale your land",
-    //          "category" => "Digital goods",
-    //          "image_url" => "10",
-    //          "home_url" => Carbon::now()->addSeconds(10),
-    //     ];
-
+       $data = [
+             "name" => "Flatmeta.io",
+             "type" => "SERVICE",
+             "description" => "flatmeta provides the land in a virtual world where u can buy and sale your land",
+             "category" => "SERVICES",
+             "home_url" => env('APP_URL'),
+        ];
 
         $paypal = new PaypalController();
-        $subscribe = $paypal->get_product('PROD-2TG59046BV006321W');
+        $subscribe = $paypal->make_product($data);
 
         print_r($subscribe);
     }
