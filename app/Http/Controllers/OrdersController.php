@@ -198,7 +198,7 @@ class OrdersController extends Controller
         
             $data = [
                 "plan_id" => "P-2J566761L44918742MKPRPLY",
-                "quantity" => "10",
+                "quantity" => "50",
                 "start_time" => Carbon::now()->addSeconds(10),
                 "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
                 'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
