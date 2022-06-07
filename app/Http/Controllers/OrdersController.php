@@ -306,7 +306,7 @@ class OrdersController extends Controller
     public function GetSubscriptionsDetails(){
         
         $paypal = new PaypalController();
-        $package = $paypal->get_subscription('I-SSC00C6JNJGE');
+        $package = $paypal->get_subscription('I-KU7MXH8WSP1H');
 
         print_r($package);
     }
