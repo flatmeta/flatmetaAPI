@@ -191,23 +191,23 @@ class OrdersController extends Controller
     }
 
     public function PurchaseTile(){
-        $data = [
-            "plan_id" => "P-1G766395YH0963631MKLR5GI",
-            "quantity" => "10",
-            "start_time" => Carbon::now()->addSeconds(10),
-            "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
-            'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
-                'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
-                    array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
-                'return_url' => '' ,
-                'cancel_url' => '' )
-        ];
+        // $data = [
+        //     "plan_id" => "P-1G766395YH0963631MKLR5GI",
+        //     "quantity" => "10",
+        //     "start_time" => Carbon::now()->addSeconds(10),
+        //     "subscriber" => array('name' => array('given_name' => "Haseeb", 'surname' => "Hanif"), 'email_address' => "Haseeb.idevation@gmail.com"),
+        //     'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
+        //         'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
+        //             array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
+        //         'return_url' => '' ,
+        //         'cancel_url' => '' )
+        // ];
 
-        $paypal = new PaypalController();
+        // $paypal = new PaypalController();
        // $subscribe = $paypal->subscribe($data);
 
         $paypal = new PaypalController();
-        $subscribe = $paypal->get_plan('P-1G766395YH0963631MKLR5GI');
+        $subscribe = $paypal->get_all_product();
 
         print_r($subscribe);
     }
