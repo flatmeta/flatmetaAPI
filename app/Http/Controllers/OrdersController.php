@@ -327,7 +327,6 @@ class OrdersController extends Controller
                 return response()->json(['status' => true, 'data' => $data]);
             }
         }
-
     }
 
     public function TransactionCancel(Request $request,$id){
