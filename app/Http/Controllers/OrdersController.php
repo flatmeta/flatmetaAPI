@@ -317,7 +317,7 @@ class OrdersController extends Controller
             
             if(!empty($Orders)){
                
-                $Orders->log  = "hellow";
+                $Orders->log  = $request;
 
                 $Orders->save();
                 $data['message'] = "Transaction Completed Successfully.";
