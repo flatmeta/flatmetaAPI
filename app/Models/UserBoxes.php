@@ -14,6 +14,7 @@ class UserBoxes extends Model
         return self::select('user_boxes.*','orders.custom_details','orders.user_id','users.fullname')
         ->leftJoin('orders','orders.id','=','user_boxes.order_id')
         ->leftJoin('users','users.id','=','orders.user_id')
+        ->where('status','=','1')
         ->get();
     }
 

@@ -30,20 +30,7 @@ class OrdersController extends Controller
                 $order->next_expiry     = date("Y-m-d h:i:s", strtotime( $order->next_due_date." +10 day" ));
 
                 if($order->save()){
-                    foreach($tiles as $tile){
-
-                        Cart::where('lat', $tile['lat'])->where('lng', $tile['lng'])->delete();
-
-                        $UserBoxes = new UserBoxes();    
-                        $UserBoxes->order_id  = $order->id;
-                        $UserBoxes->lat       = $tile['lat'];
-                        $UserBoxes->lng       = $tile['lng'];
-                        $UserBoxes->price     = "1";
-
-                        
-                        $UserBoxes->save();
-
-                    }
+                    
 
                     $data['id'] = $order->id;
                     $data['url'] = url('PurchaseTile/'. $order->id);
@@ -334,6 +321,22 @@ class OrdersController extends Controller
                 $Orders->log  = json_encode($subscription_response);
 
                 $Orders->save();
+
+                $tiles = Cart::where('user_id',$Orders->user_id)->get();
+                    foreach($tiles as $tile){
+
+                        Cart::where('lat', $tile['lat'])->where('lng', $tile['lng'])->delete();
+
+                        $UserBoxes = new UserBoxes();    
+                        $UserBoxes->order_id  = $Orders->user_id;
+                        $UserBoxes->lat       = $tile['lat'];
+                        $UserBoxes->lng       = $tile['lng'];
+                        $UserBoxes->price     = "1";
+
+                        
+                        $UserBoxes->save();
+
+                    }
 
                 $data['message'] = "Transaction Completed Successfully.";
                 return response()->json(['status' => true, 'data' => $data]);
