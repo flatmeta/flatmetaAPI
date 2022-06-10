@@ -25,7 +25,7 @@ class OrdersController extends Controller
                 $order = new Orders();    
                 $order->user_id         = $user_id;
                 $order->no_of_tiles     = count($tiles);
-                $order->amount          = count($tiles) * 0.1;
+                $order->amount          = count($tiles) * 1;
                 $order->next_due_date   = date("Y-m-d h:i:s", strtotime( date('Y-m-d')." +1 month" ));
                 $order->next_expiry     = date("Y-m-d h:i:s", strtotime( $order->next_due_date." +10 day" ));
 
