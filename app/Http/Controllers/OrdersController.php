@@ -38,7 +38,7 @@ class OrdersController extends Controller
                         $UserBoxes->order_id  = $order->id;
                         $UserBoxes->lat       = $tile['lat'];
                         $UserBoxes->lng       = $tile['lng'];
-                        $UserBoxes->price     = "0.1";
+                        $UserBoxes->price     = "1";
 
                         
                         $UserBoxes->save();
