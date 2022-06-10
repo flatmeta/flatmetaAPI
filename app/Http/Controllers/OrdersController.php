@@ -319,14 +319,17 @@ class OrdersController extends Controller
             $subscription_response = $paypal->get_subscription($request['subscription_id']);
 
             if($subscription_response->status == 'ACTIVE'){
-                $Orders = Orders::findorFail($id);
-                $Orders->status  = "1";
-                $Orders->subscription_id  = $request['subscription_id'];
-                $Orders->log  = json_encode($subscription_response);
+                
+                if($type != "sale"){
 
-                $Orders->save();
+                    $Orders = Orders::findorFail($id);
+                    $Orders->status  = "1";
+                    $Orders->subscription_id  = $request['subscription_id'];
+                    $Orders->log  = json_encode($subscription_response);
 
-                if($type == "sale"){
+                    $Orders->save();
+
+                }else{
                     $Orders = Orders::findorFail($id);
 
                     $OrderHistory = new OrderHistory();    
@@ -343,9 +346,13 @@ class OrdersController extends Controller
 
                     if($OrderHistory->save()){
                         $amount = $Orders->no_of_tiles * $Orders->sale_price;
+                        $Orders->user_id = $userID;
                         $Orders->amount = $amount;
                         $Orders->sale_price = "";
                         $Orders->on_sale = "0";
+                        $Orders->status  = "1";
+                        $Orders->subscription_id  = $request['subscription_id'];
+                        $Orders->log  = json_encode($subscription_response);
                         $Orders->save();
                     }
 
