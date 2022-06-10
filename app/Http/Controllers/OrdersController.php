@@ -199,13 +199,19 @@ class OrdersController extends Controller
         $Orders = Orders::findorFail($id);
         $User = User::findorFail($Orders->user_id);
 
+        if($Orders->sale_price){
+            $quantity = $Orders->no_of_tiles * $Orders->sale_price;
+        }else{
+            $quantity = $Orders->no_of_tiles;
+        }
+
         DB::beginTransaction();
         try {
             $data = [
                 "plan_id" => env('PLAN_ID'),
-                "quantity" => "600",
+                "quantity" => $quantity,
                 "start_time" => Carbon::now()->addSeconds(10),
-                "subscriber" => array('name' => array('given_name' => $User->fullname, 'surname' => $User->suername), 'email_address' => $User->email),
+                "subscriber" => array('name' => array('given_name' => $User->fullname, 'surname' => $User->username), 'email_address' => $User->email),
                 'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
                     'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
                         array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
@@ -349,6 +355,12 @@ class OrdersController extends Controller
                 return response()->json(['status' => true, 'data' => $data]);
             }
 
+    }
+
+    public function UpdatePlanPricing(Request $request,$id){
+        
+        
+        
     }
 
     
