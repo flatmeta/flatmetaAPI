@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Carbon\Carbon;
 use App\Models\Cart;
+use App\Models\OrderHistory;
 use App\Models\Orders;
 use App\Models\User;
 use App\Models\UserBoxes;
@@ -188,8 +189,10 @@ class OrdersController extends Controller
 
         if($Orders->sale_price){
             $quantity = $Orders->no_of_tiles * $Orders->sale_price;
+            $type="sale";
         }else{
             $quantity = $Orders->no_of_tiles;
+            $type="new";
         }
 
         DB::beginTransaction();
@@ -202,7 +205,7 @@ class OrdersController extends Controller
                 'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
                     'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
                         array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
-                    'return_url' => '' . url('TransactionCompleted/'. $id) . '',
+                    'return_url' => '' . url('TransactionCompleted/'. $id.'/'.$type) . '',
                     'cancel_url' => '' . url('TransactionCancel/'. $id) . '' )
             ];
 
@@ -308,7 +311,7 @@ class OrdersController extends Controller
         print_r($package);
     }
 
-    public function TransactionCompleted(Request $request,$id){
+    public function TransactionCompleted(Request $request,$id,$type){
 
         if(!empty($request['subscription_id'])){
             $paypal = new PaypalController();
@@ -322,18 +325,34 @@ class OrdersController extends Controller
 
                 $Orders->save();
 
+                if($type == "sale"){
+                    $Orders = Orders::findorFail($id);
+
+                    $OrderHistory = new OrderHistory();    
+                    $OrderHistory->old_order_id         = $Orders->id;
+                    $OrderHistory->user_id              = $Orders->user_id;
+                    $OrderHistory->name                 = $Orders->name;
+                    $OrderHistory->no_of_tiles          = $Orders->no_of_tiles;
+                    $OrderHistory->amount               = $Orders->amount;
+                    $OrderHistory->custom_details       = $Orders->custom_details;
+                    $OrderHistory->sale_price           = $Orders->sale_price;
+                    $OrderHistory->log                  = $Orders->log;
+                    $OrderHistory->next_due_date        = $Orders->next_due_date;
+                    $OrderHistory->next_expiry          = $Orders->next_expiry;
+
+                }
+
                 $tiles = Cart::where('user_id',$Orders->user_id)->get();
                     foreach($tiles as $tile){
 
                         Cart::where('lat', $tile['lat'])->where('lng', $tile['lng'])->delete();
 
                         $UserBoxes = new UserBoxes();    
-                        $UserBoxes->order_id  = $Orders->user_id;
+                        $UserBoxes->order_id  = $Orders->id;
                         $UserBoxes->lat       = $tile['lat'];
                         $UserBoxes->lng       = $tile['lng'];
                         $UserBoxes->price     = "1";
 
-                        
                         $UserBoxes->save();
 
                     }

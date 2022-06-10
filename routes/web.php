@@ -27,5 +27,5 @@ Route::any('/GetAllProducts', 'App\Http\Controllers\OrdersController@GetAllProdu
 
 Route::any('/GetSubscriptionsDetails', 'App\Http\Controllers\OrdersController@GetSubscriptionsDetails');
 
-Route::any('/TransactionCompleted/{id}', 'App\Http\Controllers\OrdersController@TransactionCompleted');
+Route::any('/TransactionCompleted/{id}/{type}', 'App\Http\Controllers\OrdersController@TransactionCompleted');
 

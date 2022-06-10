@@ -22,6 +22,7 @@ class Orders extends Model
         return self::select('orders.*','users.username')
         ->leftJoin('users','orders.user_id','=','users.id')
         ->where('orders.user_id',"=",$id)
+        ->where('orders.status',"=","1")
         ->get();
     }
 }
