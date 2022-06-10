@@ -34,7 +34,7 @@ class OrdersController extends Controller
                     
 
                     $data['id'] = $order->id;
-                    $data['url'] = url('PurchaseTile/'. $order->id);
+                    $data['url'] = url('PurchaseTile/'. $order->id.'/'.$user_id);
                     $data['message'] = "Tiles purchased successfully.";
                     return response()->json(['status' => true, 'data' => $data]);
                 }else{
@@ -126,7 +126,7 @@ class OrdersController extends Controller
                     $data['tiles'][$key]['custom_details'] = $order->custom_details;
                     $data['tiles'][$key]['amount'] = $order->amount;
                     $data['tiles'][$key]['sale_price'] = $order->sale_price;
-                    $data['tiles'] = url('PurchaseTile/'. $order->id);
+                    $data['tiles'][$key]['buy_link'] = url('PurchaseTile/'. $order->id);
                 }
 
                 if(!empty($data)){
