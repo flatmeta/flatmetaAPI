@@ -374,7 +374,8 @@ class OrdersController extends Controller
                     }
 
                 $data['message'] = "Transaction Completed Successfully.";
-                return response()->json(['status' => true, 'data' => $data]);
+                return redirect()->to('https://www.flatmeta.io/t/thankyou');
+                
             }
         }
     }
