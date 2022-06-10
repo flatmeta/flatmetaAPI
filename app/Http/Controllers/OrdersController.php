@@ -126,6 +126,7 @@ class OrdersController extends Controller
                     $data['tiles'][$key]['custom_details'] = $order->custom_details;
                     $data['tiles'][$key]['amount'] = $order->amount;
                     $data['tiles'][$key]['sale_price'] = $order->sale_price;
+                    $data['tiles'] = url('PurchaseTile/'. $order->id);
                 }
 
                 if(!empty($data)){
@@ -182,7 +183,7 @@ class OrdersController extends Controller
         }
     }
 
-    public function PurchaseTile($id){
+    public function PurchaseTile($id,$user_id){
 
         $Orders = Orders::findorFail($id);
         $User = User::findorFail($Orders->user_id);
@@ -205,7 +206,7 @@ class OrdersController extends Controller
                 'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
                     'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
                         array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
-                    'return_url' => '' . url('TransactionCompleted/'. $id.'/'.$type) . '',
+                    'return_url' => '' . url('TransactionCompleted/'. $id.'/'.$type.'/'.$user_id) . '',
                     'cancel_url' => '' . url('TransactionCancel/'. $id) . '' )
             ];
 
@@ -311,7 +312,7 @@ class OrdersController extends Controller
         print_r($package);
     }
 
-    public function TransactionCompleted(Request $request,$id,$type){
+    public function TransactionCompleted(Request $request,$id,$type,$userID){
 
         if(!empty($request['subscription_id'])){
             $paypal = new PaypalController();
@@ -339,6 +340,14 @@ class OrdersController extends Controller
                     $OrderHistory->log                  = $Orders->log;
                     $OrderHistory->next_due_date        = $Orders->next_due_date;
                     $OrderHistory->next_expiry          = $Orders->next_expiry;
+
+                    if($OrderHistory->save()){
+                        $amount = $Orders->no_of_tiles * $Orders->sale_price;
+                        $Orders->amount = $amount;
+                        $Orders->sale_price = "";
+                        $Orders->on_sale = "0";
+                        $Orders->save();
+                    }
 
                 }
 

@@ -20,12 +20,12 @@ Route::get('/', function () {
 
 Route::any('/CreateProd', 'App\Http\Controllers\OrdersController@CreateProd');
 Route::any('/CreatePlan', 'App\Http\Controllers\OrdersController@CreatePlan');
-Route::any('/PurchaseTile/{id}', 'App\Http\Controllers\OrdersController@PurchaseTile');
+Route::any('/PurchaseTile/{id}/{userID}', 'App\Http\Controllers\OrdersController@PurchaseTile');
 Route::any('/GetProdById', 'App\Http\Controllers\OrdersController@GetProdById');
 Route::any('/GetPlanById', 'App\Http\Controllers\OrdersController@GetPlanById');
 Route::any('/GetAllProducts', 'App\Http\Controllers\OrdersController@GetAllProducts');
 
 Route::any('/GetSubscriptionsDetails', 'App\Http\Controllers\OrdersController@GetSubscriptionsDetails');
 
-Route::any('/TransactionCompleted/{id}/{type}', 'App\Http\Controllers\OrdersController@TransactionCompleted');
+Route::any('/TransactionCompleted/{id}/{type}/{userID}', 'App\Http\Controllers\OrdersController@TransactionCompleted');
 
