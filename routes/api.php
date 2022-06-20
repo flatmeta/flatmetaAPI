@@ -28,7 +28,7 @@ $router->get('/GetUserTilesByOrderId/{id}','App\Http\Controllers\UsersController
 $router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
 $router->post('/AddNewMessaage','App\Http\Controllers\ChatController@AddNewMessaage');
 $router->get('/SaleList','App\Http\Controllers\OrdersController@SaleList');
-
+$router->post('/UploadBoxesImage','App\Http\Controllers\ImageController@UploadBoxesImage');
 Route::middleware('auth:api')->group(function () use ($router) {
 
     ## User ##
@@ -57,7 +57,7 @@ Route::middleware('auth:api')->group(function () use ($router) {
 
     ## User Boxes  ##
     $router->post('/UpdateBoxImage','App\Http\Controllers\ImageController@UpdateBoxImage');
-    $router->post('/UploadBoxesImage','App\Http\Controllers\ImageController@UploadBoxesImage');
+    
     ## User Boxes  ##
 
     ## User Followers  ##
