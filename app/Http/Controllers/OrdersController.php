@@ -371,7 +371,7 @@ class OrdersController extends Controller
 
                         $UserBoxes->save();
 
-                    }
+                }
 
                 $data['message'] = "Transaction Completed Successfully.";
                 return redirect()->to('https://www.flatmeta.io/t/thankyou');

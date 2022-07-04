@@ -61,7 +61,7 @@ class ImageController extends Controller
             
             $userdt = $request->user();
             
-            $allowedfileExtension = ['svg','jpg','JPG','jpeg','png','gif','mp4','mov'];
+            $allowedfileExtension = ['svg','jpg','JPG','jpeg','png','gif','mp4','mov','MOV'];
             $file = $request->file('images');
 
             $filename = 'fm_image'.date('Ymdhis').'_'.$file->getClientOriginalName();
