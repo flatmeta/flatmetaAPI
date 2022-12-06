@@ -7,6 +7,7 @@ use App\Models\Orders;
 use App\Models\UserBoxes;
 use Illuminate\Http\Request;
 use App\Models\UserFollowers;
+use Illuminate\Support\Facades\Mail;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 
 class UsersController extends Controller
