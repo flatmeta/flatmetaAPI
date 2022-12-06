@@ -254,26 +254,30 @@ class UsersController extends Controller
         try{
 
             $userdata = $request->user();
-            
-            $user = User::where('verification_code',$request->verification_code)->first();
 
-            if(!empty($user)){
-                if($user->verification_code == $request->verification_code){
+            if(!empty($request->verification_code)){
+                $user = User::where('verification_code',$request->verification_code)->first();
 
-                   $data['email'] = $user->email;
-    
-                    $data['message'] = "User Validated Successfully.";
-                    return response()->json(['status' => true, 'data' => $data]);
-    
+                if(!empty($user)){
+                    if($user->verification_code == $request->verification_code){
+
+                    $data['email'] = $user->email;
+        
+                        $data['message'] = "User Validated Successfully.";
+                        return response()->json(['status' => true, 'data' => $data]);
+        
+                    }else{
+                        $data['message'] = "Invalid Code.";
+                        return response()->json(['status' => false, 'data' => $data]);
+                    }
                 }else{
                     $data['message'] = "Invalid Code.";
                     return response()->json(['status' => false, 'data' => $data]);
                 }
             }else{
                 $data['message'] = "Invalid Code.";
-                return response()->json(['status' => false, 'data' => $data]);
+                return response()->json(['status' => false, 'data' => $data]); 
             }
-
             
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
