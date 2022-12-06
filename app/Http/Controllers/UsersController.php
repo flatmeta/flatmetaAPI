@@ -208,4 +208,99 @@ class UsersController extends Controller
         }
 
     }
+
+    public function ForgetPassword(Request $request){
+
+        try{
+
+            $user = User::where('email',$request->email)->first();
+
+            if(empty($user)){
+
+                $data['message'] = "User not found.";
+                return response()->json(['status' => false, 'data' => $data]);
+
+            }else{
+
+                $verification_code = random_int(1000, 9999);
+                $user->verification_code = $verification_code;
+                $user->save();
+
+                $details = [
+                    'subject' => 'Reset Password Notification',
+                    'heading' => 'Reset Password',
+                    'text_one' => 'You are receiving this email because we received a password reset request for your account.',
+                    'button_text' => $verification_code,
+                    'text_two' => 'This password reset link will expire in 60 minutes',
+                    'text_three' => 'If you did not request a password reset, no further action is required.'
+                ];
+        
+                @Mail::to($request->email)->send(new \App\Mail\ValidateUser($details));
+
+                $data['message'] = "Email sent successfully.";
+                return response()->json(['status' => true, 'data' => $data]);
+
+            }
+            
+            
+        }catch(\Exception $e){
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function VerifyForgetPasswordCode(Request $request){
+        
+        try{
+
+            $userdata = $request->user();
+            
+            $user = User::where('verification_code',$request->verification_code)->first();
+
+            if(!empty($user)){
+                if($user->verification_code == $request->verification_code){
+
+                   $data['email'] = $user->email;
+    
+                    $data['message'] = "User Validated Successfully.";
+                    return response()->json(['status' => true, 'data' => $data]);
+    
+                }else{
+                    $data['message'] = "Invalid Code.";
+                    return response()->json(['status' => false, 'data' => $data]);
+                }
+            }else{
+                $data['message'] = "Invalid Code.";
+                return response()->json(['status' => false, 'data' => $data]);
+            }
+
+            
+        }catch(\Exception $e){
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+        
+    }
+
+    public function ChangeUserPassword(Request $request){
+
+        try{
+        
+        $user = User::where('email',$request->email)->first();
+
+        $user->password         = app('hash')->make($request->password);
+        $user->verification_code = "";
+
+        if($user->save()){
+            $data['message'] = 'Successfully reset password';
+            return response()->json(['status' => true, 'data' => $data]);
+        }else{
+            $data['message'] = 'Something went wrong.';
+            return response()->json(['status' => false, 'data' => $data]);
+        }
+
+        }catch(BadRequestException $e){
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+        
+    }
+    
 }

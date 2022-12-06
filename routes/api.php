@@ -29,6 +29,12 @@ $router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
 $router->post('/AddNewMessaage','App\Http\Controllers\ChatController@AddNewMessaage');
 $router->get('/SaleList','App\Http\Controllers\OrdersController@SaleList');
 $router->post('/UploadBoxesImage','App\Http\Controllers\ImageController@UploadBoxesImage');
+
+
+$router->post('/ForgetPassword','App\Http\Controllers\UsersController@ForgetPassword');
+$router->post('/VerifyForgetPasswordCode','App\Http\Controllers\UsersController@VerifyForgetPasswordCode');
+$router->post('/ChangeUserPassword','App\Http\Controllers\UsersController@ChangeUserPassword');
+
 Route::middleware('auth:api')->group(function () use ($router) {
 
     ## User ##
