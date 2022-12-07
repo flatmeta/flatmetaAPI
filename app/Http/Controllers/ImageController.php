@@ -91,20 +91,14 @@ class ImageController extends Controller
     }
 
     public function AddNewImages(){
-
        
         $Images = json_decode(file_get_contents('assets/countries.json'));
 
         foreach($Images as $key => $image){
-
-            echo $key.' - '.$image;
-
-            $data['images'][$key]['name']    = $image->name;
-            $data['images'][$key]['url']     = env('APP_URL').'assets/uploads/defaultimages/'.$image->name; 
+            $flag = New Image;
+            $flag->name = $key.'.svg';
+            $flag->save();
         }
-            
-        return response()->json(['status' => true, 'data' => $data]);
-
         
     }
     
