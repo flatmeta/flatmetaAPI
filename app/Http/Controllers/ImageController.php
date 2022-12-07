@@ -19,6 +19,7 @@ class ImageController extends Controller
 
                 foreach($Images as $key => $image){
                     $data['images'][$key]['name']    = $image->name;
+                    $data['images'][$key]['country'] = $image->country;
                     $data['images'][$key]['url']     = env('APP_URL').'assets/uploads/defaultimages/'.$image->name; 
                 }
                
@@ -97,6 +98,7 @@ class ImageController extends Controller
         foreach($Images as $key => $image){
             $flag = New Image;
             $flag->name = strtolower($key).'.svg';
+            $flag->country = strtolower($image).'.svg';
             $flag->save();
         }
         
