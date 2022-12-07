@@ -98,7 +98,7 @@ class ImageController extends Controller
         foreach($Images as $key => $image){
             $flag = New Image;
             $flag->name = strtolower($key).'.svg';
-            $flag->country = strtolower($image).'.svg';
+            $flag->country = strtolower($image);
             $flag->save();
         }
         
