@@ -23,6 +23,8 @@ $router->get('/RemoveUserCart','App\Http\Controllers\CartController@RemoveUserCa
 
 $router->get('/GetUserTilesByOrderId/{id}','App\Http\Controllers\UsersController@GetUserTilesByOrderId');
 
+$router->get('/AddNewImages','App\Http\Controllers\ImageController@AddNewImages');
+
 ## User Boxes  ##
 
 $router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
