@@ -89,8 +89,7 @@
                </ul>
 
 
-               <a class="nav-link dropdown-indicator" href="{{ route('ReportText') }}" role="button"
-               data-bs-toggle="collapse" aria-expanded="false" aria-controls="admins">
+               <a class="nav-link " href="{{ route('ReportText') }}" aria-controls="admins">
                <div class="d-flex align-items-center"><span class="nav-link-icon"><span
                   class="fas fa-user-shield"></span></span><span
                   class="nav-link-text ps-1">Report Text</span>
