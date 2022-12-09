@@ -38,13 +38,13 @@ class ReportTextController extends Controller
     public function CreateReportText($id = null){
 
         if(!empty($id)){
-            $data['user'] = ReportText::where('id',$id)->first();
+            $data['text'] = ReportText::where('id',$id)->first();
         }else{
-            $data['user'] = "";
+            $data['text'] = "";
             
         }
         
-        return view('Users.create',$data);
+        return view('ReportText.create',$data);
     }
 
     public function StoreReportText(request $request){
