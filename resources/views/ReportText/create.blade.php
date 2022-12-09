@@ -22,7 +22,7 @@
                         <div class="col-md-6">
                             <label class="form-label">Report Text <span class="text-danger fw-700">*</span> </label>
                             <input class="form-control" name="text" type="text" placeholder="Report Text"
-                                value="{{ !empty($text) ? $user->text : '' }}" required>
+                                value="{{ !empty($text) ? $text->text : '' }}" required>
                             @error('text')
                                 <strong>{{ $message }}</strong>
                             @enderror
