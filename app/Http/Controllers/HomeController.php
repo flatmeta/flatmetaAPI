@@ -107,7 +107,6 @@ class HomeController extends Controller
         $data['type'] = "";
 
 
-        dd($data['Tiles']);
 
         return view('dashboard',$data);
     }
