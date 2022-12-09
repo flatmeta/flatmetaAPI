@@ -4,11 +4,7 @@
     <!-- ===============================================-->
     <!--    Favicons-->
     <!-- ===============================================-->
-    <link rel="apple-touch-icon" sizes="180x180" href="{{asset('assets/img/favicon_io/apple-touch-icon.png')}}">
-    <link rel="icon" type="image/png" sizes="32x32" href="{{asset('assets/img/favicon_io/favicon-32x32.png')}}">
-    <link rel="icon" type="image/png" sizes="16x16" href="{{asset('assets/img/favicon_io/favicon-16x16.png')}}">
-    <link rel="shortcut icon" type="image/x-icon" href="{{asset('assets/img/favicon_io/favicon.ico')}}">
-    <meta name="msapplication-TileImage" content="{{asset('assets/img/favicon_io/mstile-150x150.png')}}">
+   
 
     <meta name="theme-color" content="#ffffff">
     <script src="{{asset('assets/js/config.js')}}"></script>
