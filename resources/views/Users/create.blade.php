@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title')
-    {{ (!empty($text)) ? "Edit Texts" : "Create Texts" }} | Flatmeta
+    {{ (!empty($user)) ? "Edit User" : "Create User" }} | Flatmeta
 @stop
 @section('content')
 
@@ -8,31 +8,63 @@
         <div class="card-header">
             <div class="row flex-between-end">
                 <div class="col-auto align-self-center">
-                    <h5 class="mb-0">{{ (!empty($text)) ? "Edit Texts" : "Create Texts" }}</h5>
+                    <h5 class="mb-0">{{ (!empty($user)) ? "Edit User" : "Create User" }}</h5>
                 </div>
             </div>
         </div>
         <div class="card-body bg-light">
             <div class="tab-content">
                 <div class="tab-pane preview-tab-pane active">
-                    <form  method="POST" action="{{ route('StoreReportText') }}">
+                    <form  method="POST" action="{{ route('StoreUser') }}">
                         <div class="row g-3">
                             {{ csrf_field() }}
-                            <input class="form-control" name="id" type="hidden" name="id" value="{{ !empty($text) ? $text->id : '' }}">
+                            <input class="form-control" name="id" type="hidden" name="id" value="{{ !empty($user) ? $user->id : '' }}">
 
                             <div class="col-md-6">
                                 <label class="form-label">
                                     Full Name
                                     <span class="text-danger fw-700">*</span>
                                 </label>
-                                <input class="form-control" name="text" type="text" placeholder="Full  Name" value="{{ !empty($text) ? $text->text : '' }}" required>
-                                @error('text')
+                                <input class="form-control" name="fullname" type="text" placeholder="Full  Name" value="{{ !empty($user) ? $user->fullname : '' }}" required>
+                                @error('fullname')
                                     <strong>{{ $message }}</strong>
                                 @enderror
                             </div>
     
                             <div class="col-md-6">
-                                <label class="form-label">Status</label>
+                                <label class="form-label">
+                                    Username
+                                    <span class="text-danger fw-700">*</span>
+                                </label>
+                                <input class="form-control" name="username" type="text" placeholder="Username" value="{{ !empty($user) ? $user->username : '' }}" required />
+                                @error('Username')
+                                    <strong>{{ $message }}</strong>
+                                @enderror
+                            </div>
+    
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    Email
+                                    <span class="text-danger fw-700">*</span>
+                                </label>
+                                <input class="form-control" name="email" type="email" placeholder="abc@xyz.com" value="{{ !empty($user) ? $user->email : '' }}" required />
+                                @error('email')
+                                    <strong>{{ $message }}</strong>
+                                @enderror
+                            </div>
+    
+                            <div class="col-md-6">
+                                <label class="form-label">Password</label>
+                                <input class="form-control" minlength="6" name="password" type="text" {{ empty($user) ? 'required' : '' }} />
+                                @error('password')
+                                    <strong>{{ $message }}</strong>
+                                @enderror
+                            </div>
+    
+                            
+    
+                            <div class="col-md-6">
+                                <label class="form-label">User Status</label>
                                 <select class="form-select" name="status" required>
                                     <option {{ !empty($user) && $user->status == '1' ? 'selected' : '' }} value="1"
                                         selected="selected">Verified</option>
