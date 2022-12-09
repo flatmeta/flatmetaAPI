@@ -75,7 +75,7 @@
                <a class="nav-link " href="{{ route('Subscriptions') }}" aria-controls="admins">
                   <div class="d-flex align-items-center"><span class="nav-link-icon"><span
                      class="fas fa-list"></span></span><span
-                     class="nav-link-text ps-1">Report Text</span>
+                     class="nav-link-text ps-1">Subscriptions</span>
                   </div>
                </a>
 
