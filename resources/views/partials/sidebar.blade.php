@@ -23,7 +23,7 @@
      <div class="navbar-vertical-content scrollbar">
         <ul class="navbar-nav flex-column mb-3" id="navbarVerticalNav">
            <li class="nav-item">
-              <a class="nav-link " href="">
+              <a class="nav-link " href="{{ route('dashboard') }}">
                  <div class="d-flex align-items-center">
                     <span class="nav-link-icon"><span class="fas fa-chart-pie"></span></span>
                     <span class="nav-link-text ps-1">Dashboard</span>
