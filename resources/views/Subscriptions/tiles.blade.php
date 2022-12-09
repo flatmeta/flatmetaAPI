@@ -33,7 +33,7 @@
             </tr>
           </thead>
           <tbody class="list" id="table-customers-body">
-            @foreach($Orders as $key => $user)
+            @foreach($tiles as $key => $user)
             <tr class="btn-reveal-trigger">
               <td class="id align-middle white-space-nowrap py-2">
                 {{ $user->id }}
