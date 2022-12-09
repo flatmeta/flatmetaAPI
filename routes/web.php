@@ -1,6 +1,10 @@
 <?php
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\OrdersController;
+use App\Http\Controllers\UsersController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,9 +18,8 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', function () {
-    return view('welcome');
+    return view('auth.login'); 
 });
-
 
 Route::any('/CreateProd', 'App\Http\Controllers\OrdersController@CreateProd');
 Route::any('/CreatePlan', 'App\Http\Controllers\OrdersController@CreatePlan');
@@ -29,3 +32,19 @@ Route::any('/GetSubscriptionsDetails', 'App\Http\Controllers\OrdersController@Ge
 
 Route::any('/TransactionCompleted/{id}/{type}/{userID}', 'App\Http\Controllers\OrdersController@TransactionCompleted');
 
+Auth::routes();
+
+Route::group(['middleware' => ['auth']], function () { 
+
+    Route::get('/home/{type?}/{date?}', [HomeController::class, 'index'])->name('home');
+
+    Route::any('/Users',    [UsersController::class, 'index'])->name('Users');
+    Route::any('/CreateUser/{id?}', [UsersController::class, 'CreateUser'])->name('CreateUser');
+    Route::any('/StoreUser', [UsersController::class, 'StoreUser'])->name('StoreUser');
+    Route::any('/DeleteUser/{id}', [UsersController::class, 'DeleteUser'])->name('DeleteUser');
+
+    Route::any('/Subscriptions',    [OrdersController::class, 'index'])->name('Subscriptions');
+
+    Route::get('/logout', [HomeController::class, 'logout']);
+
+});

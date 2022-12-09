@@ -307,5 +307,106 @@ class UsersController extends Controller
         }
         
     }
+
+    public function index(Request $request){
+        
+        //$data['Users'] = User::GetAllUsers();
+
+        if(!empty($request)){
+            $data['Users'] = User::GetAllUsers($request);
+            $data['request'] = $request;
+        }else{
+            $data['Users'] = User::GetAllUsers('');
+            $data['request'] = "";
+        }
+
+        if(!empty($request->paginate)){
+            $data['paginate'] = $request->paginate;
+        }else{
+            $data['paginate'] = "25";
+        }
+        
+        return view('Users.list',$data);
+    }
+
+    public function CreateUser($id = null){
+
+        if(!empty($id)){
+            $data['user'] = User::where('id',$id)->first();
+        }else{
+            $data['user'] = "";
+            
+        }
+        
+        return view('Users.create',$data);
+    }
+
+    public function StoreUser(request $request){
+
+        if(empty($request->id)){
+
+            $request->validate([
+                'fullname'      => 'required',
+                'username'      => 'required',
+                'email'         => 'required|unique:users',
+                'password'      => 'required',
+                'status'        => 'required',
+            ]);
+
+            $User = new User();
+           
+            $User->fullname       = $request->fullname;
+            $User->username       = $request->username;
+            $User->email          = $request->email;
+            $User->password       = app('hash')->make($request->password);
+            $User->status         = $request->status;
+
+            if($User->save()){
+                return redirect()->route('Users');
+            }
+        }else{
+            $request->validate([
+                'fullname'      => 'required',
+                'username'      => 'required',
+                'status'        => 'required',
+            ]);
+
+            $User = User::findorFail($request->id);
+            $User->fullname       = $request->fullname;
+            $User->username       = $request->username;
+            $User->email          = $request->email;
+            if(!empty($request->password)){
+                $User->password   = app('hash')->make($request->password);
+            }            
+            $User->status         = $request->status;
+            
+            if($User->save()){
+                return redirect()->route('Users');
+            }
+        }
+    }
+
+    public function DeleteUser(Request $request,$id){
+
+        $User = User::where('id', $id)->first();
+        $User->status = "3";
+        $User->save();
+
+        if($User->save()){
+            return redirect()->route('Users');
+        }
+    }
+
+    public function generate_string($strength = 16) {
+        $input = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $input_length = strlen($input);
+        $random_string = '';
+        for($i = 0; $i < $strength; $i++) {
+            $random_character = $input[mt_rand(0, $input_length - 1)];
+            $random_string .= $random_character;
+        }
+    
+        return $random_string;
+    }
     
 }

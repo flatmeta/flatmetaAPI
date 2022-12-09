@@ -398,8 +398,14 @@ class OrdersController extends Controller
 
     public function UpdatePlanPricing(Request $request,$id){
         
+    }
+
+    public function index(){
+      
+        $data['Orders'] = Orders::GetAllOrders();
         
-        
+        return view('Subscriptions.list',$data);
+
     }
 
     

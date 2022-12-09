@@ -42,7 +42,7 @@ class CartController extends Controller
         try{ 
             $tiles = Cart::where('user_id',$userdata['id'])->get();
 
-            if(!empty($tiles)){
+            if($tiles->IsNotEmpty()){
                 foreach($tiles as $key => $tile){
                     $data['tiles'][$key]['lat']	= $tile->lat;
                     $data['tiles'][$key]['lng']	= $tile->lng;

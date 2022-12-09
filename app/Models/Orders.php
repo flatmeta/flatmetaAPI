@@ -25,4 +25,13 @@ class Orders extends Model
         ->where('orders.status',"=","1")
         ->get();
     }
+
+    public static function GetAllOrders()
+    {
+        return self::select('orders.*','users.username')
+        ->leftJoin('users','orders.user_id','=','users.id')
+        ->where('orders.status',"=","1")
+        ->get();
+    }
+
 }
