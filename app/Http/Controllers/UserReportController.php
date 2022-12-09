@@ -17,7 +17,7 @@ class UserReportController extends Controller
 
             $postreport = new UserReport();
             $postreport->user_id = $userdata->id;
-            $postreport->post_id = $request->user_id;
+            $postreport->reported_user_id = $request->user_id;
 
             if($request->report_id == "6"){
                 $postreport->report_id = $request->report_id;
