@@ -36,7 +36,7 @@ class Orders extends Model
 
     public static function GetTilesCount()
     {
-        return self::selectraw('count(no_of_tiles) as total')
+        return self::selectraw('sum(no_of_tiles) as total')
         ->get();
     }
 
