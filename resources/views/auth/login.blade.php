@@ -67,14 +67,14 @@
         </script>
         <div class="row flex-center min-vh-100 py-6">
           <div class="col-sm-10 col-md-8 col-lg-6 col-xl-5 col-xxl-4">
-            <a class="d-flex flex-center mb-4" href="javascript:;">
+            <a class="d-flex flex-center mb-4 fs-6" href="javascript:;">
                 Flatmeta
             </a>
             <div class="card">
               <div class="card-body p-4 p-sm-5">
                 <div class="row flex-between-center mb-2">
                   <div class="col-auto">
-                    <h1>Log in</h1>
+                    <h5>Log in</h5>
                   </div>
                   <div class="col-auto fs--1 text-600">
                     </div>
