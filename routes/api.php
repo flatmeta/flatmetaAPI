@@ -37,6 +37,10 @@ $router->post('/ForgetPassword','App\Http\Controllers\UsersController@ForgetPass
 $router->post('/VerifyForgetPasswordCode','App\Http\Controllers\UsersController@VerifyForgetPasswordCode');
 $router->post('/ChangeUserPassword','App\Http\Controllers\UsersController@ChangeUserPassword');
 
+$router->get('/GetAllReportText','App\Http\Controllers\ReportTextController@GetAllReportText');
+
+
+
 Route::middleware('auth:api')->group(function () use ($router) {
 
     ## User ##
@@ -78,6 +82,7 @@ Route::middleware('auth:api')->group(function () use ($router) {
     
     $router->get('/GetAllMessagesByRoomId/{id}','App\Http\Controllers\ChatController@GetAllMessagesByRoomId');
     
+    $router->post('/AddUserReport','App\Http\Controllers\UserReportController@AddUserReport');
 });
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
