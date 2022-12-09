@@ -29,7 +29,6 @@
               <th class="pe-1 align-middle white-space-nowrap" >longitute</th>
               <th class="pe-1 align-middle white-space-nowrap" >Image</th>
               <th class="pe-1 align-middle white-space-nowrap" >Price</th>
-              <th class="align-middle no-sort"></th>
             </tr>
           </thead>
           <tbody class="list" id="table-customers-body">
@@ -43,9 +42,11 @@
               </td>
               <td class="last_name align-middle white-space-nowrap py-2">
                 {{ $user->lng }}
+
+               
               </td>
               <td class="status align-middle white-space-nowrap py-2">
-                {{ $user->image }}
+                <img src="https://api.flatmeta.io/assets/uploads/defaultimages/{{ $user->image }}" width="20"/>
               </td>
               <td class="created_at align-middle white-space-nowrap py-2">
                 {{ $user->price }}
