@@ -106,6 +106,9 @@ class HomeController extends Controller
         $data['Tiles'] = Orders::GetTilesCount();
         $data['type'] = "";
 
+
+        dd($data['Tiles']);
+
         return view('dashboard',$data);
     }
 
