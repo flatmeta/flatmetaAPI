@@ -3,8 +3,9 @@
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HomeController;
-use App\Http\Controllers\OrdersController;
 use App\Http\Controllers\UsersController;
+use App\Http\Controllers\OrdersController;
+use App\Http\Controllers\ReportTextController;
 
 /*
 |--------------------------------------------------------------------------
@@ -46,6 +47,12 @@ Route::group(['middleware' => ['auth']], function () {
     Route::any('/Subscriptions',    [OrdersController::class, 'index'])->name('Subscriptions');
 
     Route::any('/ViewTiles/{id}',    [OrdersController::class, 'ViewTiles'])->name('ViewTiles');
+
+    Route::any('/ReportText',    [ReportTextController::class, 'ReportText'])->name('ReportText');
+    Route::any('/CreateReportText/{id?}', [ReportTextController::class, 'CreateReportText'])->name('CreateReportText');
+    Route::any('/StoreReportText', [ReportTextController::class, 'StoreReportText'])->name('StoreReportText');
+    Route::any('/DeleteReportText/{id}', [ReportTextController::class, 'DeleteReportText'])->name('DeleteReportText');
+
 
     Route::get('/logout', [HomeController::class, 'logout']);
 
