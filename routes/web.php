@@ -45,6 +45,8 @@ Route::group(['middleware' => ['auth']], function () {
 
     Route::any('/Subscriptions',    [OrdersController::class, 'index'])->name('Subscriptions');
 
+    Route::any('/ViewTiles/{id}',    [OrdersController::class, 'ViewTiles'])->name('ViewTiles');
+
     Route::get('/logout', [HomeController::class, 'logout']);
 
 });

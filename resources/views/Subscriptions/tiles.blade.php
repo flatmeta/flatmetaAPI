@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title')
-  Subscriptions
+  Tiles
 @stop
 @section('content')
 
@@ -25,10 +25,10 @@
           <thead class="bg-200 text-900">
             <tr>
               <th class="pe-1 align-middle white-space-nowrap" >ID</th>
-              <th class="pe-1 align-middle white-space-nowrap" >Username</th>
-              <th class="pe-1 align-middle white-space-nowrap" >No of Tiles</th>
-              <th class="pe-1 align-middle white-space-nowrap" >Status</th>
-              <th class="pe-1 align-middle white-space-nowrap" >Created At</th>
+              <th class="pe-1 align-middle white-space-nowrap" >latitute</th>
+              <th class="pe-1 align-middle white-space-nowrap" >longitute</th>
+              <th class="pe-1 align-middle white-space-nowrap" >Image</th>
+              <th class="pe-1 align-middle white-space-nowrap" >Price</th>
               <th class="align-middle no-sort"></th>
             </tr>
           </thead>
@@ -39,36 +39,16 @@
                 {{ $user->id }}
               </td>
               <td class="first_name align-middle white-space-nowrap py-2">
-                  <div class="d-flex d-flex align-items-center">
-                      <h5 class="mb-0 fs--1">
-                        {{ $user->username }}
-                      </h5>
-                  </div>
+                 {{ $user->lat }}
               </td>
               <td class="last_name align-middle white-space-nowrap py-2">
-                <div class="d-flex d-flex align-items-center">
-                    <h5 class="mb-0 fs--1">
-                      {{ $user->no_of_tiles }}
-                    </h5>
-                </div>
-            </td>
-             
+                {{ $user->lng }}
+              </td>
               <td class="status align-middle white-space-nowrap py-2">
-                {{ ($user->status == '1') ? 'Active' : "Inactive"; }}
+                {{ $user->image }}
               </td>
               <td class="created_at align-middle white-space-nowrap py-2">
-                {{ date_format(date_create($user->created_at), 'd-m-Y') }}
-              </td>
-
-              <td class="align-middle white-space-nowrap py-2 text-end">
-                <div class="dropdown font-sans-serif position-static">
-                  <button class="btn btn-link text-600 btn-sm dropdown-toggle btn-reveal" type="button" id="customer-dropdown-0" data-bs-toggle="dropdown" data-boundary="window" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs--1"></span></button>
-                  <div class="dropdown-menu dropdown-menu-end border py-0" aria-labelledby="customer-dropdown-0">
-                    <div class="bg-white py-2">
-                      <a class="dropdown-item text-info" href="{{ route('ViewTiles',$user->id) }}">View</a>
-                    </div>
-                  </div>
-                </div>
+                {{ $user->price }}
               </td>
             </tr>
             @endforeach

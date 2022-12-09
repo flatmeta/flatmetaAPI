@@ -408,6 +408,14 @@ class OrdersController extends Controller
 
     }
 
+    public function ViewTiles($id){
+      
+        $data['tiles'] = UserBoxes::where('order_id',$id)->get();
+        
+        return view('Subscriptions.tiles',$data);
+
+    }
+
     
     
 }
