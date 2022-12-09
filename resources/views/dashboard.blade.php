@@ -45,7 +45,7 @@
                 </div>
                 <div class="card-body position-relative">
                   <h6>Purchased Tiles</h6>
-                  {{  dd($Tiles) }}
+                  {{  dd($Tiles->total) }}
                   <div class="display-4 fs-4 mb-2 fw-normal font-sans-serif text-info" data-countup='{"endValue":{{ $Tiles['total'] }},"decimalPlaces":0,"suffix":""}'>{{ $Tiles['total'] }}</div><a class="fw-semi-bold fs--1 text-nowrap" href="">All Screening<span class="fas fa-angle-right ms-1" data-fa-transform="down-1"></span></a>
                 </div>
               </div>
