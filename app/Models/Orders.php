@@ -34,4 +34,10 @@ class Orders extends Model
         ->get();
     }
 
+    public static function GetTilesCount()
+    {
+        return self::selectraw('count(no_of_tiles) as total')
+        ->get();
+    }
+
 }

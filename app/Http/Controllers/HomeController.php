@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Orders;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -102,6 +103,7 @@ class HomeController extends Controller
         }
 
         $data['Users'] = User::count();
+        $data['Tiles'] = Orders::GetTilesCount();
         $data['type'] = "";
 
         return view('dashboard',$data);
