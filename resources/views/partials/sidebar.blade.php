@@ -69,24 +69,15 @@
                     <!-- more inner pages-->
                  </li>
               </ul>
-              <!-- parent pages-->
-              <a class="nav-link dropdown-indicator" href="#admins" role="button"
-                 data-bs-toggle="collapse" aria-expanded="false" aria-controls="admins">
-                 <div class="d-flex align-items-center"><span class="nav-link-icon"><span
-                    class="fas fa-list"></span></span><span
-                    class="nav-link-text ps-1">Subscriptions</span>
-                 </div>
-              </a>
-               <ul class="nav collapse" id="admins">
-                  <li class="nav-item">
-                     <a class="nav-link " href="{{ route('Subscriptions') }}" data-bs-toggle=""
-                       aria-expanded="false">
-                       <div class="d-flex align-items-center"><span class="nav-link-text ps-1">Subscriptions</span>
-                       </div>
-                     </a>
-                    <!-- more inner pages-->
-                  </li>
-               </ul>
+             
+
+
+               <a class="nav-link " href="{{ route('Subscriptions') }}" aria-controls="admins">
+                  <div class="d-flex align-items-center"><span class="nav-link-icon"><span
+                     class="fas fa-list"></span></span><span
+                     class="nav-link-text ps-1">Report Text</span>
+                  </div>
+               </a>
 
 
                <a class="nav-link " href="{{ route('ReportText') }}" aria-controls="admins">
