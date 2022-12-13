@@ -119,7 +119,7 @@ class OrdersController extends Controller
                 foreach($Orders as $key => $order){
                     $data['tiles'][$key]['id'] = $order->id;
                     $tilesdata = UserBoxes::where('order_id', $order->id)->firstOrFail();
-                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : "https://via.placeholder.com/150"; 
+                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : env('APP_URL').'assets/uploads/defaultimages/placeholder.png'; 
                     $data['tiles'][$key]['user_id'] = $order->user_id;
                     $data['tiles'][$key]['username'] = $order->username;
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
@@ -155,7 +155,7 @@ class OrdersController extends Controller
                 foreach($Orders as $key => $order){
                     $data['tiles'][$key]['id'] = $order->id;
                     $tilesdata = UserBoxes::where('order_id', $order->id)->firstOrFail();
-                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : "https://via.placeholder.com/150"; 
+                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : env('APP_URL').'assets/uploads/defaultimages/placeholder.png'; 
                     $data['tiles'][$key]['user_id'] = $order->user_id;
                     $data['tiles'][$key]['username'] = $order->username;
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
@@ -428,7 +428,7 @@ class OrdersController extends Controller
                 foreach($Orders as $key => $order){
                     $data['tiles'][$key]['id'] = $order->id;
                     $tilesdata = UserBoxes::where('order_id', $order->id)->firstOrFail();
-                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : "https://via.placeholder.com/150"; 
+                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : env('APP_URL').'assets/uploads/defaultimages/placeholder.png'; 
                     $data['tiles'][$key]['user_id'] = $order->user_id;
                     $data['tiles'][$key]['username'] = $order->username;
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
