@@ -6,6 +6,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\UsersController;
 use App\Http\Controllers\OrdersController;
 use App\Http\Controllers\ReportTextController;
+use App\Http\Controllers\UserReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -53,6 +54,7 @@ Route::group(['middleware' => ['auth']], function () {
     Route::any('/StoreReportText', [ReportTextController::class, 'StoreReportText'])->name('StoreReportText');
     Route::any('/DeleteReportText/{id}', [ReportTextController::class, 'DeleteReportText'])->name('DeleteReportText');
 
+    Route::any('/UserReports', [UserReportController::class, 'UserReports'])->name('UserReports');
 
     Route::get('/logout', [HomeController::class, 'logout']);
 

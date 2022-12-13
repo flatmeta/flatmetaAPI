@@ -78,11 +78,18 @@
                </a>
 
                <a class="nav-link " href="{{ route('ReportText') }}" aria-controls="admins">
-               <div class="d-flex align-items-center"><span class="nav-link-icon"><span
-                  class="fas fa-exclamation-triangle"></span></span><span
-                  class="nav-link-text ps-1">Report Text</span>
-               </div>
-            </a>
+                  <div class="d-flex align-items-center"><span class="nav-link-icon"><span
+                     class="fas fa-exclamation-triangle"></span></span><span
+                     class="nav-link-text ps-1">Report Text</span>
+                  </div>
+               </a>
+
+               <a class="nav-link " href="{{ route('UserReports') }}" aria-controls="admins">
+                  <div class="d-flex align-items-center"><span class="nav-link-icon"><span
+                     class="fas fa-exclamation-triangle"></span></span><span
+                     class="nav-link-text ps-1">User Reports</span>
+                  </div>
+               </a>
            </li>
         </ul>
      </div>
