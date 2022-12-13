@@ -69,8 +69,6 @@
                     <!-- more inner pages-->
                  </li>
               </ul>
-             
-
 
                <a class="nav-link " href="{{ route('Subscriptions') }}" aria-controls="admins">
                   <div class="d-flex align-items-center"><span class="nav-link-icon"><span
@@ -78,7 +76,6 @@
                      class="nav-link-text ps-1">Subscriptions</span>
                   </div>
                </a>
-
 
                <a class="nav-link " href="{{ route('ReportText') }}" aria-controls="admins">
                <div class="d-flex align-items-center"><span class="nav-link-icon"><span

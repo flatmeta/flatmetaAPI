@@ -30,6 +30,9 @@ $router->get('/AddNewImages','App\Http\Controllers\ImageController@AddNewImages'
 $router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
 $router->post('/AddNewMessaage','App\Http\Controllers\ChatController@AddNewMessaage');
 $router->get('/SaleList','App\Http\Controllers\OrdersController@SaleList');
+
+$router->get('/LatestPurchasedTiles','App\Http\Controllers\OrdersController@LatestPurchasedTiles');
+
 $router->post('/UploadBoxesImage','App\Http\Controllers\ImageController@UploadBoxesImage');
 
 

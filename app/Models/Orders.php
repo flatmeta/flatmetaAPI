@@ -40,4 +40,13 @@ class Orders extends Model
         ->get();
     }
 
+    public static function GetLatestPurchasedTiles()
+    {
+        return self::select('orders.*','users.username')
+        ->leftJoin('users','orders.user_id','=','users.id')
+        ->where('orders.on_sale',"=","1")
+        ->orderBy('orders.created_at',"desc")
+        ->get();
+    }
+
 }
