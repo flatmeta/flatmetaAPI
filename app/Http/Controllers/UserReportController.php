@@ -42,7 +42,7 @@ class UserReportController extends Controller
     public function UserReports(Request $request){
         
         
-        $data['ReportedUsers'] = UserReport::ReportedUser($request);
+        $data['ReportedUsers'] = UserReport::ReportedUser();
          
         
         return view('UserReport.list',$data);

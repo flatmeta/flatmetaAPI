@@ -9,7 +9,7 @@ class UserReport extends Model
 {
     use HasFactory;
 
-    public static function GetUserTiles()
+    public static function ReportedUser()
     {
         return self::select('user_reports.*','users.user_fullname','reported_user.reported_user_fullname','report_texts.text')
         ->leftJoin('users','users.id','=','user_reports.user_id')
