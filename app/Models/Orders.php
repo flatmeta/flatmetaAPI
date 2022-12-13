@@ -44,7 +44,7 @@ class Orders extends Model
     {
         return self::select('orders.*','users.username')
         ->leftJoin('users','orders.user_id','=','users.id')
-        ->where('orders.on_sale',"=","1")
+        ->where('orders.status',"=","1")
         ->orderBy('orders.created_at',"desc")
         ->get();
     }
