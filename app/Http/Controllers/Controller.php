@@ -40,14 +40,16 @@ class Controller extends BaseController
             $save_to = $path.$keyword;
             $this->save_image($img_url, $save_to);
 
-            $userdetails = User::where('id',$userdata->id)->first();
-            $userdetails->image = $keyword;
-            $userdetails->save();
+            $data['users'] = $userdata;
 
-            $data['message'] = 'Image Save Successfully';
-            $data['image_url'] = env('APP_URL').$save_to;
+            // $userdetails = User::where('id',$userdata->id)->first();
+            // $userdetails->image = $keyword;
+            // $userdetails->save();
 
-            return response()->json(['status' => false, 'data' => $data]);
+            // $data['message'] = 'Image Save Successfully';
+            // $data['image_url'] = env('APP_URL').$save_to;
+
+            return response()->json(['status' => true, 'data' => $data]);
 
            
         }catch(\Exception $e){
