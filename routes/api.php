@@ -25,6 +25,8 @@ $router->get('/GetUserTilesByOrderId/{id}','App\Http\Controllers\UsersController
 
 $router->get('/AddNewImages','App\Http\Controllers\ImageController@AddNewImages');
 
+$router->get('/SaveImageFromUrl','App\Http\Controllers\Controller@SaveImageFromUrl');
+
 ## User Boxes  ##
 
 $router->get('/BoxImages','App\Http\Controllers\ImageController@BoxImages');
