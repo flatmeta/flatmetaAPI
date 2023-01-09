@@ -428,7 +428,9 @@ class UsersController extends Controller
 
         $userdata = $request->user();
 
-        $user =  User::where('id', $userdata->id)->firstOrFail();
+        $data['users'] = $request;
+
+        //$user =  User::where('id', $userdata->id)->firstOrFail();
         
         try{
 
@@ -438,7 +440,7 @@ class UsersController extends Controller
             $save_to = $path.$keyword;
             $this->save_image($img_url, $save_to);
 
-            $data['users'] = $request;
+           
             
             // $user->image = $keyword;
             // $user->save();
