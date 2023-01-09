@@ -431,7 +431,7 @@ class UsersController extends Controller
 
         $userdata = $request->user();
 
-        $data['users'] = $request;
+        $data['users'] = $userdata;
 
         //$user =  User::where('id', $userdata->id)->firstOrFail();
         
