@@ -40,7 +40,7 @@ class Controller extends BaseController
             $save_to = $path.$keyword;
             $this->save_image($img_url, $save_to);
 
-            $userdetails = User::where('id',$userdata['id'])->first();
+            $userdetails = User::where('id',$userdata->id)->first();
             $userdetails->image = $keyword;
             $userdetails->save();
 
