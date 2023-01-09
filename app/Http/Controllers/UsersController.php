@@ -56,9 +56,6 @@ class UsersController extends Controller
 
         $userdata = $request->user();
 
-        $data['users'] = $userdata;
-        return response()->json(['status' => true, 'data' => $data]);
-
         $user =  User::where('id', $userdata->id)->firstOrFail();
 
         try{
@@ -430,10 +427,7 @@ class UsersController extends Controller
     public function SaveImageFromUrl(Request $request){
 
         $userdata = $request->user();
-
-        $data['users'] = $userdata;
-
-        //$user =  User::where('id', $userdata->id)->firstOrFail();
+        $user =  User::where('id', $userdata->id)->firstOrFail();
         
         try{
 
@@ -442,14 +436,12 @@ class UsersController extends Controller
             $keyword = date('dmyhis');
             $save_to = $path.$keyword;
             $this->save_image($img_url, $save_to);
-
-           
             
-            // $user->image = $keyword;
-            // $user->save();
+            $user->image = $keyword;
+            $user->save();
 
-            // $data['message'] = 'Image Save Successfully';
-            // $data['image_url'] = env('APP_URL').$save_to;
+            $data['message'] = 'Image Save Successfully';
+            $data['image_url'] = env('APP_URL').$save_to;
 
             return response()->json(['status' => true, 'data' => $data]);
 
