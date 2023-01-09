@@ -32,7 +32,7 @@ class Controller extends BaseController
         try{
 
             $img_url = $request->image_url;
-            $save_to = 'assets/uploads/users/image.jpg';
+            $save_to = 'assets/uploads/users/image.svg';
             $this->save_image($img_url, $save_to);
 
            
