@@ -426,8 +426,7 @@ class UsersController extends Controller
 
     public function SaveImageFromUrl(Request $request){
 
-        $userdata = $request->user();
-        $user =  User::where('id', $userdata->id)->firstOrFail();
+        $user =  User::where('id', $request->user_id)->firstOrFail();
         
         try{
 
