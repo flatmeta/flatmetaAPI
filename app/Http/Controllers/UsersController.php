@@ -432,7 +432,7 @@ class UsersController extends Controller
 
             $img_url = $request->image_url;
             $path = 'assets/uploads/users/';
-            $keyword = date('dmyhis');
+            $keyword = date('dmyhis').'.svg';
             $save_to = $path.$keyword;
             $this->save_image($img_url, $save_to);
             
