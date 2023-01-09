@@ -25,7 +25,7 @@ $router->get('/GetUserTilesByOrderId/{id}','App\Http\Controllers\UsersController
 
 $router->get('/AddNewImages','App\Http\Controllers\ImageController@AddNewImages');
 
-$router->post('/SaveImageFromUrl','App\Http\Controllers\Controller@SaveImageFromUrl');
+$router->post('/SaveImageFromUrl','App\Http\Controllers\UsersController@SaveImageFromUrl');
 
 ## User Boxes  ##
 
