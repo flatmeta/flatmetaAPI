@@ -427,6 +427,8 @@ class UsersController extends Controller
     public function SaveImageFromUrl(Request $request){
 
         $userdata = $request->user();
+
+        $user =  User::where('id', $userdata->id)->firstOrFail();
         
         try{
 
@@ -436,14 +438,13 @@ class UsersController extends Controller
             $save_to = $path.$keyword;
             $this->save_image($img_url, $save_to);
 
-            //$data['users'] = $userdata;
+            $data['users'] = $user;
+            
+            // $user->image = $keyword;
+            // $user->save();
 
-            $userdetails = User::where('id',$userdata->id)->first();
-            $userdetails->image = $keyword;
-            $userdetails->save();
-
-            $data['message'] = 'Image Save Successfully';
-            $data['image_url'] = env('APP_URL').$save_to;
+            // $data['message'] = 'Image Save Successfully';
+            // $data['image_url'] = env('APP_URL').$save_to;
 
             return response()->json(['status' => true, 'data' => $data]);
 
