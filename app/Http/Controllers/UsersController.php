@@ -60,7 +60,7 @@ class UsersController extends Controller
 
         try{
             $user->fullname =  $request->fullname;
-            $user->image    =  $request->user_image;
+            //$user->image    =  $request->user_image;
             $user->username = strtolower(preg_replace('/[^0-9a-zA-Z]/', '', $request->username));
     
             if($user->save()){
@@ -74,11 +74,11 @@ class UsersController extends Controller
                 
                 $userfile_path = env('APP_URL').'assets/uploads/users/';
 
-                if(empty($updateduser['image'])){ 
-                    $data['user_image'] = $userfile_path.'noimage.png';
-                }else{
-                    $data['user_image'] = $userfile_path.$updateduser['image'];
-                }
+                // if(empty($updateduser['image'])){ 
+                //     $data['user_image'] = $userfile_path.'noimage.png';
+                // }else{
+                //     $data['user_image'] = $userfile_path.$updateduser['image'];
+                // }
                 
                 $data['status']         =  $updateduser['status'];
 
@@ -438,7 +438,7 @@ class UsersController extends Controller
             $save_to = $path.$keyword;
             $this->save_image($img_url, $save_to);
 
-            $data['users'] = $user;
+            $data['users'] = $request;
             
             // $user->image = $keyword;
             // $user->save();
