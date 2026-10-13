@@ -8,4 +8,9 @@ use Illuminate\Database\Eloquent\Model;
 class ReportText extends Model
 {
     use HasFactory;
+
+    protected $fillable = [
+        'text',
+        'status'
+    ];
 }

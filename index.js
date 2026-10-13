@@ -1,3 +1,13 @@
+/**
+ * DEPRECATED / LEGACY NOTICE:
+ * Node.js & Socket.io have been eliminated.
+ * Real-time metaverse avatar movement & live chat now run natively in PHP via:
+ * 
+ *   php artisan websocket:serve
+ *   (or: composer websocket)
+ * 
+ * This file is retained only for historical reference.
+ */
 require('dotenv').config();
 const express = require("express");
 const bodyParser = require('body-parser');
@@ -39,31 +49,58 @@ io.attach(serverInstance, {
 });
 
 io.on('connection', (socket) => {
-
-    socket.on('message', async(message) => {
+    // Handle incoming chat messages (supports both camelCase and snake_case)
+    socket.on('message', async (message) => {
         try {
+            if (!message) return;
+            const roomId = message.roomId || message.room_id || null;
+            const senderId = message.senderId || message.sender_id || null;
+            const msgText = message.message || message.text || '';
+            const now = new Date();
 
-            //Mysql Insert
-            //let sql = "SELECT * FROM  users where (email = '" + req.body.email + "')";
-            let time = Date.now();
-            time = Date(time);
-            let sql = "INSERT INTO chats(room_id, sender_id, message, created_at) VALUES ('" + message.room_id + "','" + message.sender_id + "','" + message.message + "','" + time + "')";
-            con.query(sql, (err, result) => {
-                if (err) throw err;
-            });
+            if (roomId && senderId && msgText) {
+                const sql = "INSERT INTO chats(room_id, sender_id, message, created_at) VALUES (?, ?, ?, ?)";
+                con.query(sql, [roomId, senderId, msgText, now], (err, result) => {
+                    if (err) {
+                        console.error("Chat insert error:", err.message);
+                    }
+                });
+            }
 
-            io.emit('message', { data: message });
+            const payload = {
+                roomId: roomId,
+                room_id: roomId,
+                senderId: senderId,
+                sender_id: senderId,
+                message: msgText,
+                created_at: now.toISOString(),
+                createdAt: now.toISOString()
+            };
+
+            // Broadcast to all clients (both direct object and wrapped for compatibility)
+            io.emit('message', payload);
+            io.emit('chatMessage', payload);
         } catch (err) {
-            console.error(err)
+            console.error("Socket message error:", err);
         }
     });
 
-    socket.on('location', async(message) => {
+    // Handle roaming avatar location updates
+    const handleLocation = (data) => {
         try {
-            io.emit('location', { data: message });
+            if (!data) return;
+            const locationData = data.data || data;
+            io.emit('location', { data: locationData });
+            io.emit('emitLocation', { data: locationData });
         } catch (err) {
-            console.error(err)
+            console.error("Socket location error:", err);
         }
-    });
+    };
 
+    socket.on('location', handleLocation);
+    socket.on('emitLocation', handleLocation);
+
+    socket.on('disconnect', () => {
+        // Handled silently
+    });
 });

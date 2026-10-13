@@ -12,19 +12,20 @@ class ImageController extends Controller
     //
 
     public function BoxImages(Request $request){
-
-       
         try{ 
-            $Images = Image::all();
+            $data = ['images' => []];
+            $images = Image::all();
+            $baseUrl = rtrim(config('app.url', url('/')), '/') . '/';
 
-                foreach($Images as $key => $image){
-                    $data['images'][$key]['name']    = $image->name;
-                    $data['images'][$key]['country'] = $image->country;
-                    $data['images'][$key]['url']     = env('APP_URL').'assets/uploads/defaultimages/'.$image->name; 
-                }
-               
-                return response()->json(['status' => true, 'data' => $data]);
-
+            foreach($images as $image){
+                $data['images'][] = [
+                    'name' => $image->name,
+                    'country' => $image->country,
+                    'url' => $baseUrl . 'assets/uploads/defaultimages/' . $image->name
+                ];
+            }
+           
+            return response()->json(['status' => true, 'data' => $data]);
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }

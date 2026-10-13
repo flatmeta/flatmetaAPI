@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use DateTime;
 use App\Models\Chat;
+use App\Models\UserFollowers;
 use Illuminate\Http\Request;
 
 class ChatController extends Controller
@@ -14,14 +15,40 @@ class ChatController extends Controller
 
         try{ 
 
-            $room_id    = $request->roomId;
-            $sender_id  = $request->senderId;
-            $message    = $request->message;
-            $created_at    = $request->createdAt;
+            $room_id    = $request->roomId ?? $request->room_id;
+            $sender_id  = $request->senderId ?? $request->sender_id;
+            $message    = $request->message ?? $request->text;
+            $created_at = $request->createdAt ?? $request->created_at ?? now();
 
-            //Validate Fields
-            if(empty($room_id) OR empty($sender_id)  OR empty($message)){
+            // Validate Fields
+            if(empty($room_id) || empty($sender_id) || empty($message)){
                 return response()->json(['status' => false, 'message' => 'You must fill all the fields']);
+            }
+
+            // Resolve conversation room if passed as string format "room_X"
+            if (!is_numeric($room_id) && preg_match('/^room_(\d+)$/', $room_id, $m)) {
+                $otherUserId = (int) $m[1];
+                if (is_numeric($sender_id)) {
+                    $myId = (int) $sender_id;
+                    $conv = UserFollowers::where(function ($q) use ($myId, $otherUserId) {
+                        $q->where('user_id', $myId)->where('follower_user_id', $otherUserId);
+                    })->orWhere(function ($q) use ($myId, $otherUserId) {
+                        $q->where('user_id', $otherUserId)->where('follower_user_id', $myId);
+                    })->first();
+
+                    if (!$conv) {
+                        try {
+                            $conv = UserFollowers::create([
+                                'user_id' => $myId,
+                                'follower_user_id' => $otherUserId,
+                                'status' => '1',
+                            ]);
+                        } catch (\Throwable $t) {}
+                    }
+                    if ($conv) {
+                        $room_id = $conv->id;
+                    }
+                }
             }
             
             $Chat = new Chat();    
@@ -32,14 +59,13 @@ class ChatController extends Controller
            
             if($Chat->save()){
                 $data['message']  = "Message added successfully.";
+                $data['room_id']  = $room_id;
                 return response()->json(['status' => true, 'data' => $data]);
             }else{
                 $data['message']  = "Something Went Wrong.";
                 return response()->json(['status' => false, 'data' => $data]);
             };
 
-
-           
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }

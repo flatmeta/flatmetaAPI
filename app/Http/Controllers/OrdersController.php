@@ -118,8 +118,10 @@ class OrdersController extends Controller
 
                 foreach($Orders as $key => $order){
                     $data['tiles'][$key]['id'] = $order->id;
-                    $tilesdata = UserBoxes::where('order_id', $order->id)->firstOrFail();
-                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : env('APP_URL').'assets/uploads/defaultimages/placeholder.png'; 
+                    $tilesdata = UserBoxes::where('order_id', $order->id)->first();
+                    $baseUrl = config('app.url') ?: env('APP_URL', 'http://localhost:8000/');
+                    $baseUrl = rtrim($baseUrl, '/') . '/';
+                    $data['tiles'][$key]['image'] = (!empty($tilesdata) && !empty($tilesdata->image)) ? $baseUrl.'assets/uploads/defaultimages/'.$tilesdata->image : $baseUrl.'assets/uploads/defaultimages/placeholder.png'; 
                     $data['tiles'][$key]['user_id'] = $order->user_id;
                     $data['tiles'][$key]['username'] = $order->username;
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
@@ -135,6 +137,9 @@ class OrdersController extends Controller
                     $data['tiles'] = array();
                     return response()->json(['status' => true, 'data' => $data]);
                 }
+            } else {
+                $data['tiles'] = array();
+                return response()->json(['status' => true, 'data' => $data]);
             }
 
         }catch(\Exception $e){
@@ -154,8 +159,10 @@ class OrdersController extends Controller
 
                 foreach($Orders as $key => $order){
                     $data['tiles'][$key]['id'] = $order->id;
-                    $tilesdata = UserBoxes::where('order_id', $order->id)->firstOrFail();
-                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : env('APP_URL').'assets/uploads/defaultimages/placeholder.png'; 
+                    $tilesdata = UserBoxes::where('order_id', $order->id)->first();
+                    $baseUrl = config('app.url') ?: env('APP_URL', 'http://localhost:8000/');
+                    $baseUrl = rtrim($baseUrl, '/') . '/';
+                    $data['tiles'][$key]['image'] = (!empty($tilesdata) && !empty($tilesdata->image)) ? $baseUrl.'assets/uploads/defaultimages/'.$tilesdata->image : $baseUrl.'assets/uploads/defaultimages/placeholder.png'; 
                     $data['tiles'][$key]['user_id'] = $order->user_id;
                     $data['tiles'][$key]['username'] = $order->username;
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
@@ -176,6 +183,9 @@ class OrdersController extends Controller
                     $data['tiles'] = array();
                     return response()->json(['status' => true, 'data' => $data]);
                 }
+            } else {
+                $data['tiles'] = array();
+                return response()->json(['status' => true, 'data' => $data]);
             }
 
         }catch(\Exception $e){
@@ -183,10 +193,13 @@ class OrdersController extends Controller
         }
     }
 
-    public function PurchaseTile($id,$user_id){
+    public function PurchaseTile($id, $user_id = null){
 
-        $Orders = Orders::findorFail($id);
-        $User = User::findorFail($Orders->user_id);
+        $Orders = Orders::findOrFail($id);
+        if (empty($user_id)) {
+            $user_id = $Orders->user_id;
+        }
+        $User = User::findOrFail($Orders->user_id);
 
         if($Orders->sale_price){
             $quantity = $Orders->no_of_tiles * $Orders->sale_price;
@@ -199,11 +212,11 @@ class OrdersController extends Controller
         DB::beginTransaction();
         try {
             $data = [
-                "plan_id" => env('PLAN_ID'),
+                "plan_id" => env('PLAN_ID', 'P-1G766395YH0963631MKLR5GI'),
                 "quantity" => $quantity,
                 "start_time" => Carbon::now()->addSeconds(10),
                 "subscriber" => array('name' => array('given_name' => $User->fullname, 'surname' => $User->username), 'email_address' => $User->email),
-                'application_context' => array('brand_name' => '' . env('APP_NAME') . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
+                'application_context' => array('brand_name' => '' . (config('app.name') ?: env('APP_NAME', 'Flatmeta')) . ' Monthly Subscription', 'locale' => 'en-US', 'shipping_preference' => 'SET_PROVIDED_ADDRESS',
                     'user_action' => 'SUBSCRIBE_NOW', 'payment_method' =>
                         array('payer_selected' => 'PAYPAL', 'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED'),
                     'return_url' => '' . url('TransactionCompleted/'. $id.'/'.$type.'/'.$user_id) . '',
@@ -358,7 +371,8 @@ class OrdersController extends Controller
 
                 }
 
-                $tiles = Cart::where('user_id',$Orders->user_id)->get();
+                if($type != "sale"){
+                    $tiles = Cart::where('user_id',$Orders->user_id)->get();
                     foreach($tiles as $tile){
 
                         Cart::where('lat', $tile['lat'])->where('lng', $tile['lng'])->delete();
@@ -370,11 +384,13 @@ class OrdersController extends Controller
                         $UserBoxes->price     = "1";
 
                         $UserBoxes->save();
-
+                    }
                 }
 
                 $data['message'] = "Transaction Completed Successfully.";
-                return redirect()->to('https://www.flatmeta.io/t/thankyou');
+                $redirectUrl = config('app.url') ?: env('APP_URL', 'http://localhost:8000/');
+                $redirectUrl = rtrim($redirectUrl, '/') . '/flatmeta/thankyou';
+                return redirect()->to($redirectUrl);
                 
             }
         }
@@ -382,17 +398,15 @@ class OrdersController extends Controller
 
     public function TransactionCancel(Request $request,$id){
         
-        $Orders = Orders::findorFail($id);
+        $Orders = Orders::findOrFail($id);
             
-            if(!empty($Orders)){
-               
-                $Orders = Orders::findorFail($id);
-                $Orders->status  = "2";
-                $Orders->save();
+        if(!empty($Orders)){
+            $Orders->status  = "2";
+            $Orders->save();
 
-                $data['message'] = "Transaction Cancel. Please Try Again.";
-                return response()->json(['status' => true, 'data' => $data]);
-            }
+            $data['message'] = "Transaction Cancelled. Please Try Again.";
+            return response()->json(['status' => true, 'data' => $data]);
+        }
 
     }
 
@@ -427,8 +441,10 @@ class OrdersController extends Controller
 
                 foreach($Orders as $key => $order){
                     $data['tiles'][$key]['id'] = $order->id;
-                    $tilesdata = UserBoxes::where('order_id', $order->id)->firstOrFail();
-                    $data['tiles'][$key]['image']	    = (!empty($tilesdata->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tilesdata->image : env('APP_URL').'assets/uploads/defaultimages/placeholder.png'; 
+                    $tilesdata = UserBoxes::where('order_id', $order->id)->first();
+                    $baseUrl = config('app.url') ?: env('APP_URL', 'http://localhost:8000/');
+                    $baseUrl = rtrim($baseUrl, '/') . '/';
+                    $data['tiles'][$key]['image'] = (!empty($tilesdata) && !empty($tilesdata->image)) ? $baseUrl.'assets/uploads/defaultimages/'.$tilesdata->image : $baseUrl.'assets/uploads/defaultimages/placeholder.png'; 
                     $data['tiles'][$key]['user_id'] = $order->user_id;
                     $data['tiles'][$key]['username'] = $order->username;
                     $data['tiles'][$key]['no_of_tiles'] = $order->no_of_tiles;
@@ -444,6 +460,9 @@ class OrdersController extends Controller
                     $data['tiles'] = array();
                     return response()->json(['status' => true, 'data' => $data]);
                 }
+            } else {
+                $data['tiles'] = array();
+                return response()->json(['status' => true, 'data' => $data]);
             }
 
         }catch(\Exception $e){

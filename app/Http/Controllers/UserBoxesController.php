@@ -14,24 +14,24 @@ class UserBoxesController extends Controller
         try{ 
             $tilesData = UserBoxes::GetUserTiles();
 
-           // if(!empty($tilesData)){
-            if($tilesData->isNotEmpty()){
+            $data = ['tiles' => []];
+            $baseUrl = rtrim(config('app.url', url('/')), '/') . '/';
+
+            if (!empty($tilesData) && $tilesData->isNotEmpty()) {
                 foreach($tilesData as $key => $tiles){
-                    $data['tiles'][$key]['user_id']	    = $tiles->user_id;
-                    $data['tiles'][$key]['fullname']	= $tiles->fullname;
-                    $data['tiles'][$key]['order_id']	= $tiles->order_id;
-                    $data['tiles'][$key]['lat']	        = $tiles->lat;
-                    $data['tiles'][$key]['lng']	        = $tiles->lng;
-                    $data['tiles'][$key]['image']	    = (!empty($tiles->image)) ? env('APP_URL').'assets/uploads/defaultimages/'.$tiles->image : ""; 
-                    $data['tiles'][$key]['custom_details']	= (!empty($tiles->custom_details)) ? $tiles->custom_details : ""; 
+                    $data['tiles'][] = [
+                        'user_id' => $tiles->user_id,
+                        'fullname' => $tiles->fullname,
+                        'order_id' => $tiles->order_id,
+                        'lat' => $tiles->lat,
+                        'lng' => $tiles->lng,
+                        'image' => (!empty($tiles->image)) ? $baseUrl.'assets/uploads/defaultimages/'.$tiles->image : '',
+                        'custom_details' => (!empty($tiles->custom_details)) ? $tiles->custom_details : ''
+                    ];
                 }
-
-                return response()->json(['status' => true, 'data' => $data]);
-
-            }else{
-                $data['tiles'] = array();
-                return response()->json(['status' => true, 'data' => $data]);
             }
+
+            return response()->json(['status' => true, 'data' => $data]);
 
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);

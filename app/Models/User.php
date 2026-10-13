@@ -51,9 +51,12 @@ class User extends Authenticatable
         $query->select('users.*');
 
         if (!empty($request->keyword)){
-            $query->orwhere('first_name','like',"%$request->keyword%");
-            $query->orwhere('last_name','like',"%$request->keyword%");
-            $query->orwhere('email','like',"%$request->keyword%");
+            $keyword = $request->keyword;
+            $query->where(function($q) use ($keyword) {
+                $q->where('fullname','like',"%$keyword%")
+                  ->orWhere('username','like',"%$keyword%")
+                  ->orWhere('email','like',"%$keyword%");
+            });
         }
 
         if (!empty($request->status)){

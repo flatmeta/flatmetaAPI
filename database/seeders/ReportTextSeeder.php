@@ -19,12 +19,12 @@ class ReportTextSeeder extends Seeder
         DB::table('report_texts')->delete();
 
         $texts = array(
-            [ 'name' => "Spam account",'status' => "1"],
-            [ 'name' => "Nudity, pornograpphy, or violence",'status' => "1"],
-            [ 'name' => "Pretending to be someone else",'status' => "1"],
-            [ 'name' => "Inappropriate comments",'status' => "1"],
-            [ 'name' => "Harassment or bullying",'status' => "1"],
-            [ 'name' => "Other",'status' => "1"],
+            [ 'text' => "Spam account",'status' => "1"],
+            [ 'text' => "Nudity, pornography, or violence",'status' => "1"],
+            [ 'text' => "Pretending to be someone else",'status' => "1"],
+            [ 'text' => "Inappropriate comments",'status' => "1"],
+            [ 'text' => "Harassment or bullying",'status' => "1"],
+            [ 'text' => "Other",'status' => "1"],
         );
 
         foreach($texts as $text){

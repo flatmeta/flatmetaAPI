@@ -12,98 +12,90 @@ class PassportAuthController extends Controller
     //
 
     public function register(Request $request){
-        
-        $fullname     = $request->fullname;
-        $email          = $request->email;
-        $username       = strtolower(preg_replace('/[^0-9a-zA-Z]/', '', $request->username));
-        //$social_profile =  $request->social_profile;
-        $password       = $request->password;
-        $status         = "2";
+        $fullname     = trim($request->fullname ?? '');
+        $email        = trim($request->email ?? '');
+        $username     = strtolower(preg_replace('/[^0-9a-zA-Z_]/', '', $request->username ?? ''));
+        $password     = $request->password;
+        $status       = "1"; // Active
 
-
-        //Validate Email Address
-        if(empty($fullname) OR empty($username)  OR empty($email) OR empty($password) ){
+        // Validate fields
+        if(empty($fullname) || empty($username) || empty($email) || empty($password)){
             return response()->json(['status' => false, 'message' => 'You must fill all the fields']);
         }
 
-        //Validate Email Address
         if(!filter_var($email, FILTER_VALIDATE_EMAIL)){
-            return response()->json(['status' => false, 'message' => 'You must fill all the fields']);
+            return response()->json(['status' => false, 'message' => 'Please enter a valid email address']);
         }
 
-        //Password Should be Greater Or Equal to 6 Characters
         if(strlen($password) < 6){
-            return response()->json(['status' => false, 'message' => 'Password should be 6 characters ']);
+            return response()->json(['status' => false, 'message' => 'Password should be at least 6 characters']);
         }
 
-        //Check User Already Exists
-        if(User::where('email','=',$email)->exists()){
-            return response()->json(['status' => false, 'message' => 'Email already taken.']);
+        if(User::where('email', $email)->exists()){
+            return response()->json(['status' => false, 'message' => 'Email already registered.']);
+        }
+
+        if(User::where('username', $username)->exists()){
+            return response()->json(['status' => false, 'message' => 'Username already taken.']);
         }
 
         try{
             $verification_key = $this->getToken(16);
             
             $user = new User;
-            
             $user->fullname = $fullname;
             $user->email = $email;
             $user->username = $username;
-            //$user->social_profile = $social_profile;
-            $user->password = app('hash')->make($password);
+            $user->password = Hash::make($password);
             $user->status = $status;
             $user->verification_key = $verification_key;
 
-            //Save User
             if($user->save()){
-
-                // $details = [
-                //     'subject' => 'Verify your FashionVista Account',
-                //     'heading' => 'E-mail Address Validation',
-                //     'text_one' => 'Please validate your account:',
-                //     'button_text' => 'Verify Now',
-                //     'button_link' => env('WEB_URL').'validateuser/'.$verification_key
-                // ];
-
-                // @Mail::to($email)->cc([env('PROJECT_EMAIL')])->send(new \App\Mail\ValidateUser($details));
-
-                return response()->json(['status' => true, 'message' => "Register succesfully"]);
-                //return $this->login($request);
+                return response()->json(['status' => true, 'message' => "Registered successfully. Please login!"]);
             }
-           
+
+            return response()->json(['status' => false, 'message' => 'Unable to save user']);
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
-        
     }
 
     public function login(Request $request){
-        $email = $request->email;
+        $login = trim($request->email ?? $request->username ?? '');
         $password = $request->password;
-        $device_token = $request->device_token;
 
-        if(empty($email) OR empty($password) ){
-            return response()->json(['status' => 'error', 'message' => 'You must fill all the fields']);
+        if(empty($login) || empty($password)){
+            return response()->json(['status' => false, 'message' => 'Please enter both your email/username and password']);
         }
+
         try{
-            
-            $data = [
-                'email' => $email,
+            $field = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+            $credentials = [
+                $field => $login,
                 'password' => $password
             ];
      
-            if (auth()->attempt($data)) {
-                $token = auth()->user()->createToken('flatmeta')->accessToken;
-                return response()->json(['status' => true, 'access_token' => $token]);
+            if (auth()->attempt($credentials)) {
+                $user = auth()->user();
+                $token = $user->createToken('flatmeta')->accessToken;
+                return response()->json([
+                    'status' => true, 
+                    'access_token' => $token,
+                    'data' => [
+                        'user_id' => $user->id,
+                        'fullname' => $user->fullname,
+                        'username' => $user->username,
+                        'email' => $user->email,
+                        'status' => $user->status
+                    ]
+                ]);
             } else {
                 $returndata['message'] = "Wrong Email or Password";
                 return response()->json(['status' => false, 'data' => $returndata]);
             }
-           
-        }catch(BadRequestException $e){
+        }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
-
     }
 
     function getToken($length){

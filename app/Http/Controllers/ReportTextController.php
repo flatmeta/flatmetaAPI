@@ -10,23 +10,21 @@ class ReportTextController extends Controller
     //
 
     public function GetAllReportText(){
-        
         try{
-            
-            $texts = ReportText::all()->where('status','1');
+            $data = ['reports' => []];
+            $texts = ReportText::where('status','1')->get();
            
-            foreach($texts as $key => $text){
-                $data['reports'][$key]['id']     = $text->id;
-                $data['reports'][$key]['text']   = $text->text;
+            foreach($texts as $text){
+                $data['reports'][] = [
+                    'id' => $text->id,
+                    'text' => $text->text
+                ];
             }
 
             return response()->json(['status' => true, 'data' => $data]);
-            // return $this->login($request);
-           
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
-
     }
 
     public function ReportText(Request $request){
@@ -47,59 +45,45 @@ class ReportTextController extends Controller
         return view('ReportText.create',$data);
     }
 
-    public function StoreReportText(request $request){
+    public function StoreReportText(Request $request){
 
         if(empty($request->id)){
-
             $request->validate([
-                'fullname'      => 'required',
-                'username'      => 'required',
-                'email'         => 'required|unique:users',
-                'password'      => 'required',
+                'text'          => 'required',
                 'status'        => 'required',
             ]);
 
-            $User = new ReportText();
-           
-            $User->fullname       = $request->fullname;
-            $User->username       = $request->username;
-            $User->email          = $request->email;
-            $User->password       = app('hash')->make($request->password);
-            $User->status         = $request->status;
+            $reportText = new ReportText();
+            $reportText->text    = $request->text;
+            $reportText->status  = $request->status;
 
-            if($User->save()){
-                return redirect()->route('Users');
+            if($reportText->save()){
+                return redirect()->route('ReportText');
             }
         }else{
             $request->validate([
-                'fullname'      => 'required',
-                'username'      => 'required',
+                'text'          => 'required',
                 'status'        => 'required',
             ]);
 
-            $User = ReportText::findorFail($request->id);
-            $User->fullname       = $request->fullname;
-            $User->username       = $request->username;
-            $User->email          = $request->email;
-            if(!empty($request->password)){
-                $User->password   = app('hash')->make($request->password);
-            }            
-            $User->status         = $request->status;
-            
-            if($User->save()){
-                return redirect()->route('Users');
+            $reportText = ReportText::findOrFail($request->id);
+            $reportText->text    = $request->text;
+            $reportText->status  = $request->status;
+
+            if($reportText->save()){
+                return redirect()->route('ReportText');
             }
         }
     }
 
     public function DeleteReportText(Request $request,$id){
 
-        $User = ReportText::where('id', $id)->first();
-        $User->status = "3";
-        $User->save();
-
-        if($User->save()){
-            return redirect()->route('Users');
+        $reportText = ReportText::where('id', $id)->first();
+        if ($reportText) {
+            $reportText->status = "3";
+            $reportText->save();
         }
+
+        return redirect()->route('ReportText');
     }
 }

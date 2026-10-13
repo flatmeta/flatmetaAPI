@@ -1,5 +1,9 @@
 <?php
 
+// Suppress deprecation notices from polluting JSON API responses on PHP 8.5+
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
+ini_set('display_errors', '0');
+
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
 

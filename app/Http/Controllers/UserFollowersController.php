@@ -137,67 +137,71 @@ class UserFollowersController extends Controller
         return $string ? implode(', ', $string) . ' ago' : 'just now';
     }
 
-    public function GetRoomId(Request $request){
-
+    public function GetRoomId(Request $request)
+    {
         $userdata = $request->user();
+        $myId = $userdata ? (int) $userdata['id'] : (int) $request->input('my_user_id', 0);
+        $otherId = (int) $request->follower_user_id;
 
-        try{ 
-            $friendrequests = UserFollowers::where('follower_user_id',$userdata['id'])->where('user_id',$request->follower_user_id)->first();
+        if (!$myId) {
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'room_id' => 'room_' . $otherId,
+                    'roomId' => 'room_' . $otherId,
+                    'messages' => []
+                ]
+            ]);
+        }
 
-            if(empty($friendrequests)){
-
-                $friendrequests = UserFollowers::where('user_id',$userdata['id'])->where('follower_user_id',$request->follower_user_id)->first();
-
-                if($friendrequests['status'] == "1"){
-                    $data['room_id'] = $friendrequests['id'];
-
-                    $messages = Chat::where('room_id',$friendrequests['id'])->get();
-                    if(!empty($messages)){
-                        foreach($messages as $key => $message){
-                            $data['messages'][$key]['id']           = $message->id;
-                            $data['messages'][$key]['roomId']      = $message->room_id;
-                            $data['messages'][$key]['senderId']    = $message->sender_id;
-                            $data['messages'][$key]['message']      = $message->message;
-                            $data['messages'][$key]['createdAt']   = $message->created_at;
-                        }
-                    }else{
-                        $data['messages'] = array();
-                    }
-
-                    return response()->json(['status' => true, 'data' => $data]);
-                }else{
-                    $data['room_id'] = "";
-                    $data['messages'] = array();
-                    return response()->json(['status' => true, 'data' => $data]);
-                }
-                
-            }else{
-                if($friendrequests['status'] == "1"){
-                    $data['room_id'] = $friendrequests['id'];
-
-                    $messages = Chat::where('room_id',$friendrequests['id'])->get();
-
-                    if(!empty($messages)){
-                        foreach($messages as $key => $message){
-                            $data['messages'][$key]['id']           = $message->id;
-                            $data['messages'][$key]['roomId']      = $message->room_id;
-                            $data['messages'][$key]['senderId']    = $message->sender_id;
-                            $data['messages'][$key]['message']      = $message->message;
-                            $data['messages'][$key]['createdAt']   = $message->created_at ;
-                        }
-                    }else{
-                        $data['messages'] = array();
-                    }
-
-                    return response()->json(['status' => true, 'data' => $data]);
-                }else{
-                    $data['room_id'] = "";
-                    $data['messages'] = array();
-                    return response()->json(['status' => true, 'data' => $data]);
-                }
+        try {
+            if (!$otherId) {
+                return response()->json(['status' => false, 'message' => 'Invalid user ID']);
             }
-           
-        }catch(\Exception $e){
+
+            // Find existing connection or conversation room between the two users
+            $conversation = UserFollowers::where(function ($q) use ($myId, $otherId) {
+                $q->where('user_id', $myId)->where('follower_user_id', $otherId);
+            })->orWhere(function ($q) use ($myId, $otherId) {
+                $q->where('user_id', $otherId)->where('follower_user_id', $myId);
+            })->first();
+
+            // Automatically create a connection room if none exists yet
+            if (!$conversation) {
+                $conversation = UserFollowers::create([
+                    'user_id' => $myId,
+                    'follower_user_id' => $otherId,
+                    'status' => '1',
+                ]);
+            } elseif ($conversation->status != '1') {
+                $conversation->status = '1';
+                $conversation->save();
+            }
+
+            $roomId = $conversation->id;
+            $messages = Chat::where('room_id', $roomId)->orderBy('id', 'asc')->get();
+
+            $data = [
+                'room_id' => $roomId,
+                'roomId' => $roomId,
+                'messages' => []
+            ];
+
+            foreach ($messages as $message) {
+                $data['messages'][] = [
+                    'id' => $message->id,
+                    'roomId' => $message->room_id,
+                    'room_id' => $message->room_id,
+                    'senderId' => $message->sender_id,
+                    'sender_id' => $message->sender_id,
+                    'message' => $message->message,
+                    'createdAt' => $message->created_at ? $message->created_at->toISOString() : null,
+                    'created_at' => $message->created_at ? $message->created_at->toISOString() : null,
+                ];
+            }
+
+            return response()->json(['status' => true, 'data' => $data]);
+        } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
     }

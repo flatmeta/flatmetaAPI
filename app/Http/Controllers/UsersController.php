@@ -137,7 +137,9 @@ class UsersController extends Controller
 
         try{
 
+            $data = ['users' => []];
             $users = User::all();
+            $userfile_path = rtrim(config('app.url', url('/')), '/') . '/assets/uploads/users/';
 
             foreach($users as $key => $user){
                 if(!empty($request->user_id)){  
@@ -150,34 +152,17 @@ class UsersController extends Controller
                     $friends = "";
                 }
 
-                $data['users'][$key]['id'] = $user->id;
-                $data['users'][$key]['fullname'] = $user->fullname;
-                $data['users'][$key]['username'] = $user->username;
-
-                $userfile_path = env('APP_URL').'assets/uploads/users/';
-
-                if(empty($user->image)){ 
-                    $data['users'][$key]['image'] = $userfile_path.'noimage.png';
-                }else{
-                    $data['users'][$key]['image'] = $userfile_path.$user->image;
-                }
-
-                if(empty($friends)){
-                    $data['users'][$key]['friends'] = false;
-                }else{
-                    $data['users'][$key]['friends'] = true;
-                }
-
-                $data['users'][$key]['status'] = $user->status;
-
+                $data['users'][] = [
+                    'id' => $user->id,
+                    'fullname' => $user->fullname,
+                    'username' => $user->username,
+                    'image' => empty($user->image) ? $userfile_path.'noimage.png' : $userfile_path.$user->image,
+                    'friends' => !empty($friends),
+                    'status' => $user->status
+                ];
             }
 
-            if(!empty($data)){
-                return response()->json(['status' => true, 'data' => $data]);
-            }else{
-                $data['users'] = array();
-                return response()->json(['status' => true, 'data' => $data]);
-            }
+            return response()->json(['status' => true, 'data' => $data]);
 
         }catch(BadRequestException $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
@@ -410,26 +395,48 @@ class UsersController extends Controller
     }
 
     function save_image($img_url, $save_to){
+        $parsed = parse_url($img_url);
+        if (!$parsed || !isset($parsed['host']) || !in_array(strtolower($parsed['scheme'] ?? ''), ['http', 'https'])) {
+            throw new \Exception("Invalid image URL protocol");
+        }
+
+        $host = strtolower($parsed['host']);
+        if ($host === 'localhost' || $host === '127.0.0.1' || str_starts_with($host, '169.254.') || str_starts_with($host, '10.') || str_starts_with($host, '192.168.')) {
+            throw new \Exception("Access to internal host is blocked");
+        }
+
         $ch = curl_init($img_url);
         curl_setopt($ch, CURLOPT_HEADER, 0);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_BINARYTRANSFER,1);
-        $rawdata=curl_exec ($ch);
-        curl_close ($ch);
-        if(file_exists($save_to)){
-            unlink($save_to);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+        $rawdata = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode >= 400 || !$rawdata) {
+            throw new \Exception("Failed to download image from remote URL");
         }
-        $fp = fopen($save_to,'x');
-        fwrite($fp, $rawdata);
-        fclose($fp);
+
+        $dir = dirname($save_to);
+        if (!file_exists($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
+        if(file_exists($save_to)){
+            @unlink($save_to);
+        }
+        $fp = fopen($save_to, 'w');
+        if ($fp) {
+            fwrite($fp, $rawdata);
+            fclose($fp);
+        }
     }
 
     public function SaveImageFromUrl(Request $request){
 
-        $user =  User::where('id', $request->user_id)->firstOrFail();
-        
         try{
-
+            $user = User::where('id', $request->user_id)->firstOrFail();
             $img_url = $request->image_url;
             $path = 'assets/uploads/users/';
             $keyword = date('dmyhis').'.svg';
@@ -439,12 +446,13 @@ class UsersController extends Controller
             $user->image = $keyword;
             $user->save();
 
-            $data['message'] = 'Image Save Successfully';
-            $data['image_url'] = env('APP_URL').$save_to;
+            $baseUrl = config('app.url') ?: env('APP_URL', 'http://localhost:8000/');
+            $baseUrl = rtrim($baseUrl, '/') . '/';
+
+            $data['message'] = 'Image Saved Successfully';
+            $data['image_url'] = $baseUrl.$save_to;
 
             return response()->json(['status' => true, 'data' => $data]);
-
-           
         }catch(\Exception $e){
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
