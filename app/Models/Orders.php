@@ -9,44 +9,53 @@ class Orders extends Model
 {
     use HasFactory;
 
-    public static function GetUserTiles()
+    public static function GetUserTiles($filter = 'all')
     {
-        return self::select('orders.*','users.username')
-        ->leftJoin('users','orders.user_id','=','users.id')
-        ->where('orders.on_sale',"=","1")
-        ->get();
+        $query = self::select('orders.*', 'users.username', 'users.fullname')
+            ->leftJoin('users', 'orders.user_id', '=', 'users.id')
+            ->where('orders.on_sale', '=', '1');
+
+        if ($filter === 'recent') {
+            $query->orderBy('orders.created_at', 'desc');
+        } elseif ($filter === 'popular') {
+            $query->orderBy('orders.no_of_tiles', 'desc')->orderBy('orders.created_at', 'desc');
+        } else {
+            $query->orderBy('orders.id', 'desc');
+        }
+
+        return $query->get();
     }
 
     public static function GetUserTilesByID($id)
     {
-        return self::select('orders.*','users.username')
-        ->leftJoin('users','orders.user_id','=','users.id')
-        ->where('orders.user_id',"=",$id)
-        ->where('orders.status',"=","1")
-        ->get();
+        return self::select('orders.*', 'users.username', 'users.fullname')
+            ->leftJoin('users', 'orders.user_id', '=', 'users.id')
+            ->where('orders.user_id', '=', $id)
+            ->where('orders.status', '=', '1')
+            ->orderBy('orders.id', 'desc')
+            ->get();
     }
 
     public static function GetAllOrders()
     {
-        return self::select('orders.*','users.username')
-        ->leftJoin('users','orders.user_id','=','users.id')
-        ->where('orders.status',"=","1")
-        ->get();
+        return self::select('orders.*', 'users.username', 'users.fullname')
+            ->leftJoin('users', 'orders.user_id', '=', 'users.id')
+            ->where('orders.status', '=', '1')
+            ->orderBy('orders.id', 'desc')
+            ->get();
     }
 
     public static function GetTilesCount()
     {
-        return self::selectraw('sum(no_of_tiles) as total')
-        ->get();
+        return self::selectRaw('sum(no_of_tiles) as total')->get();
     }
 
     public static function GetLatestPurchasedTiles()
     {
-        return self::select('orders.*','users.username')
-        ->leftJoin('users','orders.user_id','=','users.id')
-        ->where('orders.status',"=","1")
-        ->orderBy('orders.created_at',"desc")
-        ->get();
+        return self::select('orders.*', 'users.username', 'users.fullname')
+            ->leftJoin('users', 'orders.user_id', '=', 'users.id')
+            ->where('orders.status', '=', '1')
+            ->orderBy('orders.created_at', 'desc')
+            ->get();
     }
-
 }

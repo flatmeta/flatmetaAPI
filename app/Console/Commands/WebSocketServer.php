@@ -6,8 +6,6 @@ use Illuminate\Console\Command;
 use App\Models\Chat;
 use App\Models\UserFollowers;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class WebSocketServer extends Command
 {
@@ -23,10 +21,19 @@ class WebSocketServer extends Command
      *
      * @var string
      */
-    protected $description = 'Start the native PHP WebSocket server for FlatMeta real-time avatar movement and live chat';
+    protected $description = 'Start the native PHP WebSocket server for FlatMeta real-time avatar movement, typing callouts, and live chat';
 
     /**
-     * Array of client connections: resource_id => ['socket' => resource, 'handshake' => bool, 'buffer' => string]
+     * Array of client connections:
+     * resource_id => [
+     *   'socket' => resource,
+     *   'handshake' => bool,
+     *   'buffer' => string,
+     *   'ip' => string,
+     *   'userId' => string|null,
+     *   'username' => string|null,
+     *   'lastLocation' => array|null,
+     * ]
      *
      * @var array
      */
@@ -77,10 +84,9 @@ class WebSocketServer extends Command
         $this->info("  FlatMeta Native PHP WebSocket Server Running  ");
         $this->info("  Listening on: {$address}");
         $this->info("  Port: {$port} | Protocol: RFC 6455");
-        $this->info("  Node.js dependency: ELIMINATED");
+        $this->info("  Features: Presence, Disconnect Cleanup, Chat");
         $this->info("=================================================");
 
-        // Graceful signal handling
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
             pcntl_signal(SIGINT, [$this, 'shutdown']);
@@ -96,11 +102,10 @@ class WebSocketServer extends Command
                 if (is_resource($client['socket'])) {
                     $read[] = $client['socket'];
                 } else {
-                    unset($this->clients[$id]);
+                    $this->disconnectClient($id, 'Stale socket resource');
                 }
             }
 
-            // Stream select with 200ms timeout
             $changed = @stream_select($read, $write, $except, 0, 200000);
 
             if ($changed === false) {
@@ -108,7 +113,6 @@ class WebSocketServer extends Command
             }
 
             if ($changed > 0) {
-                // New incoming client connection
                 if (in_array($this->master, $read)) {
                     $newSocket = @stream_socket_accept($this->master, 0);
                     if ($newSocket) {
@@ -118,14 +122,16 @@ class WebSocketServer extends Command
                             'socket' => $newSocket,
                             'handshake' => false,
                             'buffer' => '',
-                            'ip' => stream_socket_get_name($newSocket, true)
+                            'ip' => @stream_socket_get_name($newSocket, true),
+                            'userId' => null,
+                            'username' => null,
+                            'lastLocation' => null,
                         ];
                         $this->line("<fg=cyan>[+]</> Client #{$clientId} connected from {$this->clients[$clientId]['ip']} (Active: " . count($this->clients) . ")");
                     }
                     unset($read[array_search($this->master, $read)]);
                 }
 
-                // Process client data
                 foreach ($read as $clientSocket) {
                     $clientId = (int) $clientSocket;
                     if (!isset($this->clients[$clientId])) {
@@ -135,7 +141,7 @@ class WebSocketServer extends Command
                     $data = @fread($clientSocket, 65536);
 
                     if ($data === false || $data === '') {
-                        $this->disconnectClient($clientId, "Connection closed by client");
+                        $this->disconnectClient($clientId, 'Connection closed by client');
                         continue;
                     }
 
@@ -152,14 +158,13 @@ class WebSocketServer extends Command
     }
 
     /**
-     * Perform RFC 6455 WebSocket Handshake.
+     * Perform RFC 6455 WebSocket Handshake and sync active online citizens.
      */
     protected function performHandshake(int $clientId, string $data): void
     {
         $client = &$this->clients[$clientId];
         $client['buffer'] .= $data;
 
-        // Check if full HTTP header has been received
         $headerEndPos = strpos($client['buffer'], "\r\n\r\n");
         if ($headerEndPos === false) {
             return;
@@ -169,7 +174,7 @@ class WebSocketServer extends Command
         $client['buffer'] = substr($client['buffer'], $headerEndPos + 4);
 
         if (!preg_match("/Sec-WebSocket-Key: *(.*?)\r\n/i", $headers, $match)) {
-            $this->disconnectClient($clientId, "Handshake failed: Missing Sec-WebSocket-Key");
+            $this->disconnectClient($clientId, 'Handshake failed: Missing Sec-WebSocket-Key');
             return;
         }
 
@@ -181,7 +186,6 @@ class WebSocketServer extends Command
         $response .= "Connection: Upgrade\r\n";
         $response .= "Sec-WebSocket-Accept: {$accept}\r\n";
 
-        // RFC 6455: Only include Sec-WebSocket-Protocol if the client requested it
         if (preg_match("/Sec-WebSocket-Protocol: *(.*?)\r\n/i", $headers, $protoMatch)) {
             $requestedProtocols = array_map('trim', explode(',', $protoMatch[1]));
             if (!empty($requestedProtocols[0])) {
@@ -207,7 +211,16 @@ class WebSocketServer extends Command
         ];
         $this->sendToClient($clientId, json_encode($welcome));
 
-        // Process any frames received immediately after headers
+        // Immediately send all currently online avatars' locations to this newly joined client
+        foreach ($this->clients as $otherId => $otherClient) {
+            if ($otherId !== $clientId && !empty($otherClient['handshake']) && !empty($otherClient['lastLocation'])) {
+                $this->sendToClient($clientId, json_encode([
+                    'event' => 'location',
+                    'data' => $otherClient['lastLocation']
+                ]));
+            }
+        }
+
         if (strlen($client['buffer']) > 0) {
             $this->processClientFrames($clientId, '');
         }
@@ -227,7 +240,6 @@ class WebSocketServer extends Command
 
         while (strlen($client['buffer']) >= 2) {
             $bytes = array_values(unpack('C*', substr($client['buffer'], 0, 2)));
-            $fin = ($bytes[0] & 0x80) === 0x80;
             $opcode = $bytes[0] & 0x0F;
             $isMasked = ($bytes[1] & 0x80) === 0x80;
             $payloadLength = $bytes[1] & 0x7F;
@@ -236,14 +248,14 @@ class WebSocketServer extends Command
 
             if ($payloadLength === 126) {
                 if (strlen($client['buffer']) < $offset + 2) {
-                    return; // Wait for more data
+                    return;
                 }
                 $lenData = unpack('nlen', substr($client['buffer'], $offset, 2));
                 $payloadLength = $lenData['len'];
                 $offset += 2;
             } elseif ($payloadLength === 127) {
                 if (strlen($client['buffer']) < $offset + 8) {
-                    return; // Wait for more data
+                    return;
                 }
                 $lenData = unpack('Jlen', substr($client['buffer'], $offset, 8));
                 $payloadLength = $lenData['len'];
@@ -253,20 +265,19 @@ class WebSocketServer extends Command
             $maskingKey = '';
             if ($isMasked) {
                 if (strlen($client['buffer']) < $offset + 4) {
-                    return; // Wait for more data
+                    return;
                 }
                 $maskingKey = substr($client['buffer'], $offset, 4);
                 $offset += 4;
             }
 
             if (strlen($client['buffer']) < $offset + $payloadLength) {
-                return; // Full payload not yet arrived
+                return;
             }
 
             $rawPayload = substr($client['buffer'], $offset, $payloadLength);
             $client['buffer'] = substr($client['buffer'], $offset + $payloadLength);
 
-            // Unmask payload if masked
             $payload = '';
             if ($isMasked && strlen($maskingKey) === 4) {
                 for ($i = 0; $i < $payloadLength; $i++) {
@@ -276,7 +287,6 @@ class WebSocketServer extends Command
                 $payload = $rawPayload;
             }
 
-            // Handle opcodes
             switch ($opcode) {
                 case 0x1: // Text frame
                     $this->handleTextMessage($clientId, $payload);
@@ -284,19 +294,17 @@ class WebSocketServer extends Command
 
                 case 0x8: // Close connection
                     $this->sendFrame($clientId, '', 0x8);
-                    $this->disconnectClient($clientId, "Client requested close");
+                    $this->disconnectClient($clientId, 'Client requested close');
                     return;
 
                 case 0x9: // Ping
-                    $this->sendFrame($clientId, $payload, 0xA); // Respond with Pong
+                    $this->sendFrame($clientId, $payload, 0xA);
                     break;
 
                 case 0xA: // Pong
-                    // Keep-alive received
                     break;
 
                 default:
-                    // Unsupported opcode
                     break;
             }
         }
@@ -316,7 +324,6 @@ class WebSocketServer extends Command
         $event = $decoded['event'] ?? $decoded['type'] ?? null;
         $data = $decoded['data'] ?? $decoded['payload'] ?? $decoded;
 
-        // If no explicit 'event' key, infer event from payload structure
         if (!$event) {
             if (isset($decoded['message']) || isset($decoded['roomId'])) {
                 $event = 'message';
@@ -330,12 +337,26 @@ class WebSocketServer extends Command
         switch ($event) {
             case 'message':
             case 'chatMessage':
-                $this->handleChatMessage($clientId, $data);
+                $this->handleChatMessage($clientId, is_array($data) ? $data : []);
                 break;
 
             case 'location':
             case 'emitLocation':
-                $this->handleLocationUpdate($clientId, $data);
+                $this->handleLocationUpdate($clientId, is_array($data) ? $data : []);
+                break;
+
+            case 'typing':
+                $this->handleTypingUpdate($clientId, is_array($data) ? $data : []);
+                break;
+
+            case 'user_disconnect':
+                $uid = is_array($data) ? ($data['userId'] ?? null) : $data;
+                if ($uid) {
+                    $this->broadcast(json_encode([
+                        'event' => 'user_disconnect',
+                        'data' => ['userId' => (string) $uid]
+                    ]), $clientId);
+                }
                 break;
 
             case 'ping':
@@ -343,7 +364,6 @@ class WebSocketServer extends Command
                 break;
 
             default:
-                // Relay generic event to all other clients
                 $broadcastPayload = json_encode([
                     'event' => $event,
                     'data' => $data
@@ -354,20 +374,20 @@ class WebSocketServer extends Command
     }
 
     /**
-     * Process chat messages and persist to database.
+     * Process chat messages, preserve rich sender/expression metadata, and persist to DB.
      */
     protected function handleChatMessage(int $clientId, array $data): void
     {
-        $roomId = $data['roomId'] ?? $data['room_id'] ?? null;
-        $senderId = $data['senderId'] ?? $data['sender_id'] ?? null;
-        $msgText = $data['message'] ?? $data['text'] ?? '';
-        $createdAt = now()->toISOString();
+        $roomId = $data['roomId'] ?? $data['room_id'] ?? 'global_nearby';
+        $senderId = $data['senderId'] ?? $data['sender_id'] ?? ($this->clients[$clientId]['userId'] ?? null);
+        $msgText = trim($data['message'] ?? $data['text'] ?? '');
+        $createdAt = $data['created_at'] ?? $data['createdAt'] ?? now()->toISOString();
 
-        if (empty($msgText)) {
+        if ($msgText === '') {
             return;
         }
 
-        // Resolve numeric room ID if string like "room_X" or numeric
+        // Resolve numeric room ID if string like "room_X"
         $numericRoomId = null;
         if (is_numeric($roomId)) {
             $numericRoomId = (int) $roomId;
@@ -398,7 +418,6 @@ class WebSocketServer extends Command
             }
         }
 
-        // Persist to database if senderId and numericRoomId are valid database foreign keys
         if ($numericRoomId && is_numeric($senderId)) {
             try {
                 Chat::create([
@@ -409,16 +428,25 @@ class WebSocketServer extends Command
                     'updated_at' => now(),
                 ]);
             } catch (\Throwable $e) {
-                $this->warn("Chat DB insert notice: " . $e->getMessage());
+                $this->warn('Chat DB insert notice: ' . $e->getMessage());
             }
         }
 
         $payload = [
+            'id' => $data['id'] ?? ('msg_' . time() . '_' . mt_rand(100, 999)),
             'roomId' => $roomId,
             'room_id' => $roomId,
+            'scope' => $data['scope'] ?? 'nearby',
             'senderId' => $senderId,
             'sender_id' => $senderId,
+            'senderName' => $data['senderName'] ?? $data['fullname'] ?? ($this->clients[$clientId]['username'] ?? 'Citizen'),
+            'senderUsername' => $data['senderUsername'] ?? $data['username'] ?? ($this->clients[$clientId]['username'] ?? 'citizen'),
+            'senderAvatar' => $data['senderAvatar'] ?? $data['image'] ?? '',
+            'recipientId' => $data['recipientId'] ?? null,
             'message' => $msgText,
+            'expression' => $data['expression'] ?? null,
+            'lat' => $data['lat'] ?? null,
+            'lng' => $data['lng'] ?? null,
             'created_at' => $createdAt,
             'createdAt' => $createdAt
         ];
@@ -430,23 +458,47 @@ class WebSocketServer extends Command
 
         $this->line("<fg=yellow>[CHAT]</> Client #{$clientId} (Room: {$roomId}): " . substr($msgText, 0, 40));
 
-        // Broadcast to all connected clients
         $this->broadcast($json);
     }
 
     /**
-     * Process avatar location updates and broadcast to metaverse clients.
+     * Process live typing callouts and broadcast to nearby citizens.
+     */
+    protected function handleTypingUpdate(int $clientId, array $data): void
+    {
+        $payload = [
+            'userId' => $data['userId'] ?? ($this->clients[$clientId]['userId'] ?? null),
+            'username' => $data['username'] ?? ($this->clients[$clientId]['username'] ?? 'Citizen'),
+            'text' => $data['text'] ?? '',
+        ];
+
+        $this->broadcast(json_encode([
+            'event' => 'typing',
+            'data' => $payload
+        ]), $clientId);
+    }
+
+    /**
+     * Process avatar location updates, store last known state for new joiners, and broadcast.
      */
     protected function handleLocationUpdate(int $clientId, array $data): void
     {
         $locData = $data['data'] ?? $data;
+        if (isset($this->clients[$clientId]) && is_array($locData)) {
+            if (!empty($locData['userId'])) {
+                $this->clients[$clientId]['userId'] = (string) $locData['userId'];
+            }
+            if (!empty($locData['username'])) {
+                $this->clients[$clientId]['username'] = (string) $locData['username'];
+            }
+            $this->clients[$clientId]['lastLocation'] = $locData;
+        }
 
         $json = json_encode([
             'event' => 'location',
             'data' => $locData
         ]);
 
-        // Broadcast to all clients EXCEPT the sender to prevent jitter
         $this->broadcast($json, $clientId);
     }
 
@@ -483,7 +535,7 @@ class WebSocketServer extends Command
         }
 
         $length = strlen($payload);
-        $header = chr(0x80 | $opcode); // FIN = 1, Opcode
+        $header = chr(0x80 | $opcode);
 
         if ($length <= 125) {
             $header .= chr($length);
@@ -498,16 +550,36 @@ class WebSocketServer extends Command
     }
 
     /**
-     * Cleanly disconnect a client.
+     * Cleanly disconnect a client and broadcast `user_disconnect` so zombie avatars are removed.
      */
     protected function disconnectClient(int $clientId, string $reason = ''): void
     {
         if (isset($this->clients[$clientId])) {
+            $disconnectedUserId = $this->clients[$clientId]['userId'] ?? null;
+
             if (is_resource($this->clients[$clientId]['socket'])) {
                 @fclose($this->clients[$clientId]['socket']);
             }
             unset($this->clients[$clientId]);
+
             $this->line("<fg=red>[-]</> Client #{$clientId} disconnected ({$reason}). Active: " . count($this->clients));
+
+            if ($disconnectedUserId) {
+                // Only broadcast disconnect if this userId has no other open socket
+                $stillConnected = false;
+                foreach ($this->clients as $c) {
+                    if (($c['userId'] ?? null) === $disconnectedUserId) {
+                        $stillConnected = true;
+                        break;
+                    }
+                }
+                if (!$stillConnected) {
+                    $this->broadcast(json_encode([
+                        'event' => 'user_disconnect',
+                        'data' => ['userId' => (string) $disconnectedUserId]
+                    ]));
+                }
+            }
         }
     }
 
@@ -518,7 +590,7 @@ class WebSocketServer extends Command
     {
         $this->info("\nShutting down FlatMeta WebSocket server...");
         foreach (array_keys($this->clients) as $clientId) {
-            $this->disconnectClient($clientId, "Server shutting down");
+            $this->disconnectClient($clientId, 'Server shutting down');
         }
         if (is_resource($this->master)) {
             @fclose($this->master);

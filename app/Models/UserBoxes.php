@@ -11,18 +11,27 @@ class UserBoxes extends Model
 
     public static function GetUserTiles()
     {
-        return self::select('user_boxes.*','orders.custom_details','orders.user_id','users.fullname')
-        ->leftJoin('orders','orders.id','=','user_boxes.order_id')
-        ->leftJoin('users','users.id','=','orders.user_id')
-        ->where('orders.status','=','1')
-        ->get();
+        return self::select(
+            'user_boxes.*',
+            'orders.custom_details',
+            'orders.user_id',
+            'orders.on_sale',
+            'orders.sale_price',
+            'orders.amount',
+            'orders.no_of_tiles',
+            'users.fullname',
+            'users.username'
+        )
+            ->leftJoin('orders', 'orders.id', '=', 'user_boxes.order_id')
+            ->leftJoin('users', 'users.id', '=', 'orders.user_id')
+            ->where('orders.status', '=', '1')
+            ->get();
     }
 
     public static function GetUserTilesByOrderId($id)
     {
         return self::select('*')
-        ->where('order_id',$id)
-        ->get();
+            ->where('order_id', $id)
+            ->get();
     }
-    
 }

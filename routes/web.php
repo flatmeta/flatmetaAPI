@@ -48,6 +48,8 @@ Route::group(['middleware' => ['auth']], function () {
     Route::any('/Subscriptions',    [OrdersController::class, 'index'])->name('Subscriptions');
 
     Route::any('/ViewTiles/{id}',    [OrdersController::class, 'ViewTiles'])->name('ViewTiles');
+    Route::any('/RevertOrderFromCMS/{id}', [OrdersController::class, 'RevertOrderFromCMS'])->name('RevertOrderFromCMS');
+    Route::any('/RevokeOrderFromCMS/{id}', [OrdersController::class, 'RevokeOrderFromCMS'])->name('RevokeOrderFromCMS');
 
     Route::any('/ReportText',    [ReportTextController::class, 'ReportText'])->name('ReportText');
     Route::any('/CreateReportText/{id?}', [ReportTextController::class, 'CreateReportText'])->name('CreateReportText');

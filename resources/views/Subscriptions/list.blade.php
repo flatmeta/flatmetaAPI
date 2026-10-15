@@ -65,7 +65,9 @@
                   <button class="btn btn-link text-600 btn-sm dropdown-toggle btn-reveal" type="button" id="customer-dropdown-0" data-bs-toggle="dropdown" data-boundary="window" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs--1"></span></button>
                   <div class="dropdown-menu dropdown-menu-end border py-0" aria-labelledby="customer-dropdown-0">
                     <div class="bg-white py-2">
-                      <a class="dropdown-item text-info" href="{{ route('ViewTiles',$user->id) }}">View</a>
+                      <a class="dropdown-item text-info" href="{{ route('ViewTiles',$user->id) }}">View Tiles</a>
+                      <a class="dropdown-item text-warning" href="{{ route('RevertOrderFromCMS',$user->id) }}" onclick="return confirm('Revert custom HTML/code and tile graphics to default for Order #{{ $user->id }}?')">Revert Code &amp; Tiles to Default</a>
+                      <a class="dropdown-item text-danger" href="{{ route('RevokeOrderFromCMS',$user->id) }}" onclick="return confirm('Remove ownership and all tiles for Order #{{ $user->id }}?')">Revoke Ownership (Abuse)</a>
                     </div>
                   </div>
                 </div>

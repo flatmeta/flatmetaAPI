@@ -29,13 +29,16 @@ class PaypalController extends Controller
             $this->base_url = env('PAYPAL_SANDBOX_BASE_URL');
         }
 
-        // Set the Paypal API Context/Credentials
-        $outh = new OAuthTokenCredential($this->client_id, $this->secret);
-        $this->apiContext = new ApiContext($outh);
-        $this->apiContext->setConfig(config('paypal.settings'));
-        $token = new OAuthTokenCredential($this->client_id, $this->secret);
-        $this->token = $token->getAccessToken(config('paypal.settings'));
-
+        // Set the Paypal API Context/Credentials safely so local/offline setups don't crash on construct
+        try {
+            $outh = new OAuthTokenCredential($this->client_id, $this->secret);
+            $this->apiContext = new ApiContext($outh);
+            $this->apiContext->setConfig(config('paypal.settings'));
+            $token = new OAuthTokenCredential($this->client_id, $this->secret);
+            $this->token = $token->getAccessToken(config('paypal.settings'));
+        } catch (\Throwable $e) {
+            $this->token = null;
+        }
     }
 
 

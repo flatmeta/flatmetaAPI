@@ -7,33 +7,49 @@ use Illuminate\Http\Request;
 
 class UserBoxesController extends Controller
 {
-    //
+    protected function formatTileImage(?string $image, string $baseUrl): string
+    {
+        if (empty($image)) {
+            return '';
+        }
+        if (str_starts_with($image, 'data:') || str_starts_with($image, 'http://') || str_starts_with($image, 'https://')) {
+            return $image;
+        }
+        return $baseUrl . 'assets/uploads/defaultimages/' . ltrim($image, '/');
+    }
 
-    public function PurchasedTiles(Request $request){
-
-        try{ 
+    public function PurchasedTiles(Request $request)
+    {
+        try {
             $tilesData = UserBoxes::GetUserTiles();
 
             $data = ['tiles' => []];
             $baseUrl = rtrim(config('app.url', url('/')), '/') . '/';
 
             if (!empty($tilesData) && $tilesData->isNotEmpty()) {
-                foreach($tilesData as $key => $tiles){
+                foreach ($tilesData as $tiles) {
                     $data['tiles'][] = [
+                        'id' => $tiles->id,
                         'user_id' => $tiles->user_id,
-                        'fullname' => $tiles->fullname,
+                        'username' => $tiles->username ?? 'citizen',
+                        'fullname' => $tiles->fullname ?? 'Metaverse Citizen',
                         'order_id' => $tiles->order_id,
-                        'lat' => $tiles->lat,
-                        'lng' => $tiles->lng,
-                        'image' => (!empty($tiles->image)) ? $baseUrl.'assets/uploads/defaultimages/'.$tiles->image : '',
-                        'custom_details' => (!empty($tiles->custom_details)) ? $tiles->custom_details : ''
+                        'area_id' => $tiles->order_id,
+                        'lat' => (float) $tiles->lat,
+                        'lng' => (float) $tiles->lng,
+                        'image' => $this->formatTileImage($tiles->image, $baseUrl),
+                        'custom_details' => !empty($tiles->custom_details) ? $tiles->custom_details : '',
+                        'on_sale' => ($tiles->on_sale ?? '0') == '1',
+                        'sale_status' => $tiles->on_sale ?? '0',
+                        'sale_price' => (float) ($tiles->sale_price ?? 0),
+                        'amount' => (float) ($tiles->amount ?? 0.10),
+                        'no_of_tiles' => (int) ($tiles->no_of_tiles ?? 1),
                     ];
                 }
             }
 
             return response()->json(['status' => true, 'data' => $data]);
-
-        }catch(\Exception $e){
+        } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
     }

@@ -5,104 +5,128 @@ namespace App\Http\Controllers;
 use App\Models\Image;
 use App\Models\UserBoxes;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 
 class ImageController extends Controller
 {
-    //
+    protected function baseUrl(): string
+    {
+        $base = config('app.url') ?: env('APP_URL', url('/'));
+        return rtrim($base, '/') . '/';
+    }
 
-    public function BoxImages(Request $request){
-        try{ 
+    public function BoxImages(Request $request)
+    {
+        try {
             $data = ['images' => []];
             $images = Image::all();
-            $baseUrl = rtrim(config('app.url', url('/')), '/') . '/';
+            $baseUrl = $this->baseUrl();
 
-            foreach($images as $image){
+            foreach ($images as $image) {
                 $data['images'][] = [
                     'name' => $image->name,
                     'country' => $image->country,
-                    'url' => $baseUrl . 'assets/uploads/defaultimages/' . $image->name
+                    'url' => $baseUrl . 'assets/uploads/defaultimages/' . $image->name,
                 ];
             }
-           
+
             return response()->json(['status' => true, 'data' => $data]);
-        }catch(\Exception $e){
+        } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
     }
 
-    public function UpdateBoxImage(Request $request){
-
-        try{ 
+    public function UpdateBoxImage(Request $request)
+    {
+        try {
             $image = $request->image;
 
-            $UserBoxes = UserBoxes::where('order_id',$request->order_id)->get();
-            if(!empty($UserBoxes)){
-                foreach($UserBoxes as $UserBox){
-                    $updateBox = UserBoxes::findorFail($UserBox->id);
-                    $updateBox->image  = $image;
+            $UserBoxes = UserBoxes::where('order_id', $request->order_id)->get();
+            if ($UserBoxes && $UserBoxes->isNotEmpty()) {
+                foreach ($UserBoxes as $UserBox) {
+                    $updateBox = UserBoxes::findOrFail($UserBox->id);
+                    $updateBox->image = $image;
                     $updateBox->save();
                 }
 
-                $data['message'] = "Image Updated Successfully.";
+                $data['message'] = 'Image Updated Successfully.';
                 return response()->json(['status' => true, 'data' => $data]);
-                
-            }else{
-                $data['message'] = "Something went wrong.";
+            } else {
+                $data['message'] = 'No tiles found for the specified order_id.';
                 return response()->json(['status' => false, 'data' => $data]);
             }
-
-        }catch(\Exception $e){
+        } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
     }
 
-    public function UploadBoxesImage(Request $request){
+    /**
+     * Reverts tiles in an order back to default map (clears custom image) or a previous image
+     */
+    public function RevertBoxImage(Request $request)
+    {
+        try {
+            $previousImage = $request->input('previous_image', '');
+            $UserBoxes = UserBoxes::where('order_id', $request->order_id)->get();
+            if ($UserBoxes && $UserBoxes->isNotEmpty()) {
+                foreach ($UserBoxes as $UserBox) {
+                    $UserBox->image = $previousImage;
+                    $UserBox->save();
+                }
+                return response()->json([
+                    'status' => true,
+                    'data' => ['message' => 'Land artwork reverted successfully.'],
+                ]);
+            }
+            return response()->json(['status' => false, 'message' => 'Order tiles not found']);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+    }
 
-        try{
-            
-            $userdt = $request->user();
-            
-            $allowedfileExtension = ['svg','jpg','JPG','jpeg','png','gif','mp4','mov','MOV'];
+    public function UploadBoxesImage(Request $request)
+    {
+        try {
+            if (!$request->hasFile('images')) {
+                return response()->json(['status' => false, 'data' => ['message' => 'No image file provided']]);
+            }
+
+            $allowedfileExtension = ['svg', 'jpg', 'JPG', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'MOV'];
             $file = $request->file('images');
 
-            $filename = 'fm_image'.date('Ymdhis').'_'.$file->getClientOriginalName();
-            $extension = $file->getClientOriginalExtension();
-            $media_type = explode('/',$file->getMimeType());
+            $safeOriginal = preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+            $filename = 'fm_image' . date('YmdHis') . '_' . $safeOriginal;
+            $extension = strtolower($file->getClientOriginalExtension());
 
-            $check = in_array($extension, $allowedfileExtension);
+            if (in_array($extension, $allowedfileExtension)) {
+                $uploadDir = 'assets/uploads/defaultimages/';
+                if (!file_exists($uploadDir)) {
+                    @mkdir($uploadDir, 0755, true);
+                }
 
-            if ($check){
-                
-                $upload = $file->move('assets/uploads/defaultimages/',$filename); 
-                
+                $file->move($uploadDir, $filename);
+
                 $data['name'] = $filename;
-                $data['url']  = env('APP_URL').$upload; 
-                
-                return response()->json(['status' => true, 'data' => $data]);
+                $data['url'] = $this->baseUrl() . $uploadDir . $filename;
 
-            }else{
-                $data['message'] = "Unsupported Media Type";
+                return response()->json(['status' => true, 'data' => $data]);
+            } else {
+                $data['message'] = 'Unsupported Media Type';
                 return response()->json(['status' => false, 'data' => $data]);
             }
-           
-        }catch(BadRequestException $e){
+        } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
-
     }
 
-    public function AddNewImages(){
-       
+    public function AddNewImages()
+    {
         $Images = json_decode(file_get_contents('assets/countries.json'));
 
-        foreach($Images as $key => $image){
-            $flag = New Image;
-            $flag->name = strtolower($key).'.svg';
+        foreach ($Images as $key => $image) {
+            $flag = new Image();
+            $flag->name = strtolower($key) . '.svg';
             $flag->country = ucwords($image);
             $flag->save();
         }
-        
     }
-    
 }
