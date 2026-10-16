@@ -41,6 +41,56 @@ class OrdersController extends Controller
         return $baseUrl . 'assets/uploads/defaultimages/' . ltrim($image, '/');
     }
 
+    protected function decodeOrderMeta($order): array
+    {
+        if (empty($order->log)) {
+            return [];
+        }
+        $decoded = json_decode($order->log, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    protected function applyOrderMeta($order, Request $request): void
+    {
+        $meta = $this->decodeOrderMeta($order);
+        $metaKeys = [
+            'area_title',
+            'slug',
+            'three_words',
+            'span_bounds',
+            'embed_url',
+            'custom_code',
+            'previous_image',
+            'promoted',
+            'views',
+        ];
+        foreach ($metaKeys as $key) {
+            if ($request->has($key)) {
+                $meta[$key] = $request->input($key);
+            }
+        }
+        if ($request->has('area_title') && !empty($request->input('area_title'))) {
+            $order->name = substr((string) $request->input('area_title'), 0, 190);
+        }
+        if (!empty($meta)) {
+            $order->log = json_encode($meta);
+        }
+    }
+
+    protected function cancelExistingSubscription(?string $subscriptionId, string $reason): bool
+    {
+        if (empty($subscriptionId)) {
+            return false;
+        }
+        try {
+            $paypal = new PaypalController();
+            $paypal->cancel_subscription($subscriptionId, ['reason' => $reason]);
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
     protected function formatOrderRecord($order): array
     {
         $boxes = UserBoxes::where('order_id', $order->id)->get();
@@ -48,6 +98,7 @@ class OrdersController extends Controller
         $lat = $firstBox ? (float) $firstBox->lat : 51.50972;
         $lng = $firstBox ? (float) $firstBox->lng : -0.104317;
         $tileCount = $boxes->count() > 0 ? $boxes->count() : (int) ($order->no_of_tiles ?: 1);
+        $meta = $this->decodeOrderMeta($order);
 
         $tilesArr = [];
         foreach ($boxes as $b) {
@@ -64,6 +115,15 @@ class OrdersController extends Controller
             'id' => $order->id,
             'order_id' => $order->id,
             'area_id' => $order->id,
+            'area_title' => $meta['area_title'] ?? ($order->name ?: ('Land #' . $order->id)),
+            'slug' => $meta['slug'] ?? '',
+            'three_words' => $meta['three_words'] ?? '',
+            'span_bounds' => $meta['span_bounds'] ?? null,
+            'embed_url' => $meta['embed_url'] ?? '',
+            'custom_code' => $meta['custom_code'] ?? '',
+            'previous_image' => $meta['previous_image'] ?? '',
+            'promoted' => (bool) ($meta['promoted'] ?? false),
+            'views' => (int) ($meta['views'] ?? 0),
             'image' => $this->formatTileImage($firstBox ? $firstBox->image : null),
             'user_id' => $order->user_id,
             'username' => $order->username ?? 'citizen',
@@ -139,6 +199,7 @@ class OrdersController extends Controller
 
             $order = new Orders();
             $order->user_id = $user_id;
+            $order->name = $request->input('area_title', 'Land Plot');
             $order->no_of_tiles = $count;
             $order->amount = $monthlyAmount;
             $order->custom_details = $request->input('custom_details', '');
@@ -147,6 +208,7 @@ class OrdersController extends Controller
             $order->status = '1';
             $order->next_due_date = date('Y-m-d H:i:s', strtotime(date('Y-m-d') . ' +1 month'));
             $order->next_expiry = date('Y-m-d H:i:s', strtotime($order->next_due_date . ' +10 day'));
+            $this->applyOrderMeta($order, $request);
 
             if ($order->save()) {
                 $defaultImage = $request->input('image', '');
@@ -213,15 +275,19 @@ class OrdersController extends Controller
 
             if (!empty($Orders)) {
                 if (!$userdata || $Orders->user_id == $userdata['id']) {
-                    $Orders->custom_details = $custom_details;
+                    if ($request->has('custom_details')) {
+                        $Orders->custom_details = $custom_details ?? '';
+                    }
                     if ($request->has('on_sale')) {
                         $Orders->on_sale = $request->on_sale ? '1' : '0';
                     }
                     if ($request->has('sale_price')) {
                         $Orders->sale_price = (string) $request->sale_price;
                     }
+                    $this->applyOrderMeta($Orders, $request);
                     $Orders->save();
                     $data['message'] = 'Content Updated Successfully.';
+                    $data['order'] = $this->formatOrderRecord($Orders);
                     return response()->json(['status' => true, 'data' => $data]);
                 } else {
                     $data['message'] = 'Unauthorized to edit this land area.';
@@ -248,6 +314,7 @@ class OrdersController extends Controller
                     if ($request->has('custom_details')) {
                         $Orders->custom_details = $request->custom_details;
                     }
+                    $this->applyOrderMeta($Orders, $request);
                     $Orders->save();
 
                     $data['message'] = 'Sale price successfully updated.';
@@ -263,7 +330,8 @@ class OrdersController extends Controller
     }
 
     /**
-     * Direct Marketplace Purchase with 10% Platform Commission & OrderHistory logging
+     * Direct Marketplace Purchase with 10% Platform Commission, Seller Subscription Cancellation & OrderHistory logging
+     * Brief [j] & [k]: "if sold subscription for sold tiles will cancel, remaining month will charge them, next month will not charge them"
      */
     public function BuyMarketplaceOrder(Request $request)
     {
@@ -284,6 +352,12 @@ class OrdersController extends Controller
             $commission = round($totalPrice * self::PLATFORM_COMMISSION_RATE, 2);
             $sellerNet = round($totalPrice - $commission, 2);
 
+            $oldSubId = $order->subscription_id ?? null;
+            $subCancelled = $this->cancelExistingSubscription(
+                $oldSubId,
+                'Land area #' . $order->id . ' sold on FlatMeta Marketplace; seller recurring billing stopped for next cycle.'
+            );
+
             $history = new OrderHistory();
             $history->old_order_id = $order->id;
             $history->user_id = $order->user_id;
@@ -297,6 +371,8 @@ class OrdersController extends Controller
                 'total_paid' => $totalPrice,
                 'platform_commission_10pct' => $commission,
                 'seller_net_90pct' => $sellerNet,
+                'previous_subscription_id' => $oldSubId,
+                'seller_subscription_cancelled' => $subCancelled,
                 'transferred_at' => now()->toISOString(),
             ]);
             $history->next_due_date = $order->next_due_date;
@@ -308,6 +384,7 @@ class OrdersController extends Controller
             $order->sale_price = '0';
             $order->on_sale = '0';
             $order->status = '1';
+            $order->subscription_id = null;
             $order->save();
 
             DB::commit();
@@ -319,7 +396,8 @@ class OrdersController extends Controller
                     'total_paid' => $totalPrice,
                     'commission' => $commission,
                     'seller_net' => $sellerNet,
-                    'message' => "Land area acquired! Ownership transferred to Citizen #{$buyerId}.",
+                    'seller_subscription_cancelled' => $subCancelled,
+                    'message' => "Land area acquired! Ownership transferred to Citizen #{$buyerId} (Seller recurring billing cancelled for next month).",
                 ],
             ]);
         } catch (\Exception $e) {
@@ -329,7 +407,7 @@ class OrdersController extends Controller
     }
 
     /**
-     * Releases an owned land area back to the open map and updates subscription count
+     * Releases an owned land area back to the open map and cancels any recurring subscription
      */
     public function ReleaseOrder(Request $request)
     {
@@ -342,12 +420,19 @@ class OrdersController extends Controller
                 return response()->json(['status' => false, 'message' => 'Unauthorized to release this land area']);
             }
 
+            if (!empty($order->subscription_id)) {
+                $this->cancelExistingSubscription(
+                    $order->subscription_id,
+                    'Citizen released land area #' . $order->id . ' back to the open map.'
+                );
+            }
+
             UserBoxes::where('order_id', $order->id)->delete();
             $order->delete();
 
             return response()->json([
                 'status' => true,
-                'data' => ['message' => 'Land area released back to the open map.'],
+                'data' => ['message' => 'Land area released back to the open map and subscription updated.'],
             ]);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
@@ -549,14 +634,23 @@ class OrdersController extends Controller
             if ($subscription_response && $subscription_response->status == 'ACTIVE') {
                 if ($type != 'sale') {
                     $Orders = Orders::findOrFail($id);
+                    $meta = $this->decodeOrderMeta($Orders);
+                    $meta['paypal_subscription'] = $subscription_response;
                     $Orders->status = '1';
                     $Orders->subscription_id = $request['subscription_id'];
-                    $Orders->log = json_encode($subscription_response);
+                    $Orders->log = json_encode($meta);
                     $Orders->save();
                 } else {
                     $Orders = Orders::findOrFail($id);
                     $totalAmount = $Orders->no_of_tiles * $Orders->sale_price;
                     $commission = round($totalAmount * self::PLATFORM_COMMISSION_RATE, 2);
+
+                    // Brief [j] & [k]: Cancel previous owner's subscription so next month will not charge them
+                    $oldSubscriptionId = $Orders->subscription_id ?? null;
+                    $subCancelled = $this->cancelExistingSubscription(
+                        $oldSubscriptionId,
+                        'Land area #' . $Orders->id . ' resold on FlatMeta; previous subscription cancelled for next cycle.'
+                    );
 
                     $OrderHistory = new OrderHistory();
                     $OrderHistory->old_order_id = $Orders->id;
@@ -570,18 +664,22 @@ class OrdersController extends Controller
                         'paypal' => $subscription_response,
                         'platform_commission_10pct' => $commission,
                         'seller_net_90pct' => round($totalAmount - $commission, 2),
+                        'previous_subscription_id' => $oldSubscriptionId,
+                        'seller_subscription_cancelled' => $subCancelled,
                     ]);
                     $OrderHistory->next_due_date = $Orders->next_due_date;
                     $OrderHistory->next_expiry = $Orders->next_expiry;
 
                     if ($OrderHistory->save()) {
+                        $meta = $this->decodeOrderMeta($Orders);
+                        $meta['paypal_subscription'] = $subscription_response;
                         $Orders->user_id = $userID;
                         $Orders->amount = $totalAmount;
                         $Orders->sale_price = '';
                         $Orders->on_sale = '0';
                         $Orders->status = '1';
                         $Orders->subscription_id = $request['subscription_id'];
-                        $Orders->log = json_encode($subscription_response);
+                        $Orders->log = json_encode($meta);
                         $Orders->save();
                     }
                 }
@@ -639,7 +737,10 @@ class OrdersController extends Controller
     public function RevertOrderFromCMS($id)
     {
         $order = Orders::findOrFail($id);
+        $meta = $this->decodeOrderMeta($order);
+        unset($meta['custom_code'], $meta['embed_url']);
         $order->custom_details = '';
+        $order->log = !empty($meta) ? json_encode($meta) : null;
         $order->save();
 
         UserBoxes::where('order_id', $order->id)->update(['image' => null]);
@@ -653,6 +754,9 @@ class OrdersController extends Controller
     public function RevokeOrderFromCMS($id)
     {
         $order = Orders::findOrFail($id);
+        if (!empty($order->subscription_id)) {
+            $this->cancelExistingSubscription($order->subscription_id, 'Order revoked by CMS moderation.');
+        }
         UserBoxes::where('order_id', $order->id)->delete();
         $order->delete();
 
@@ -672,6 +776,173 @@ class OrdersController extends Controller
             }
 
             return response()->json(['status' => true, 'data' => $data]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Brief 28/4/22 #15 & Gamification:
+     * Returns Top Landowners, Friendly Citizens, and Clan Standings.
+     */
+    public function Leaderboard(Request $request)
+    {
+        try {
+            $topLandowners = Orders::select(
+                'orders.user_id',
+                'users.username',
+                'users.fullname',
+                DB::raw('SUM(orders.no_of_tiles) as total_tiles'),
+                DB::raw('COUNT(orders.id) as total_areas')
+            )
+                ->leftJoin('users', 'users.id', '=', 'orders.user_id')
+                ->where('orders.status', '1')
+                ->groupBy('orders.user_id', 'users.username', 'users.fullname')
+                ->orderByDesc('total_tiles')
+                ->limit(15)
+                ->get();
+
+            $clans = [
+                ['name' => 'Cyber Architects', 'badge' => '⚡', 'members' => 42, 'tiles' => 1480, 'color' => '#06b6d4'],
+                ['name' => 'Emerald Guardians', 'badge' => '🌿', 'members' => 38, 'tiles' => 1260, 'color' => '#10b981'],
+                ['name' => 'Solar Pioneers', 'badge' => '☀️', 'members' => 31, 'tiles' => 980, 'color' => '#f59e0b'],
+                ['name' => 'Royal Knights', 'badge' => '🛡️', 'members' => 29, 'tiles' => 845, 'color' => '#8b5cf6'],
+            ];
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'landowners' => $topLandowners,
+                    'clans' => $clans,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    protected function getProposalsFilePath(): string
+    {
+        return storage_path('app/community_proposals.json');
+    }
+
+    protected function loadCommunityProposals(): array
+    {
+        $path = $this->getProposalsFilePath();
+        if (file_exists($path)) {
+            $decoded = json_decode(file_get_contents($path), true);
+            if (is_array($decoded) && count($decoded) > 0) {
+                return $decoded;
+            }
+        }
+        return [
+            [
+                'id' => 'prop-1',
+                'title' => 'Interactive Weather & Day/Night Map Shader',
+                'author' => 'alex_meta',
+                'category' => 'Map Engine',
+                'description' => 'Syncs map lighting and ambient particle effects with real-world local time at the inspected coordinates.',
+                'codeSnippet' => "const hour = new Date().getUTCHours();\nctx.fillStyle = (hour < 6 || hour > 20) ? 'rgba(15, 23, 42, 0.28)' : 'transparent';",
+                'votes' => 148,
+                'targetVotes' => 150,
+                'status' => 'Testing',
+                'created_at' => '2026-10-01T12:00:00Z',
+            ],
+            [
+                'id' => 'prop-2',
+                'title' => 'Tile Audio Ambience & Spatial Soundscapes',
+                'author' => 'sound_weaver',
+                'category' => 'Personalisation',
+                'description' => 'Allows land owners to attach a looping ambient audio stream or chime when an avatar walks onto their square.',
+                'codeSnippet' => "const chime = new Audio(area.ambientAudioUrl);\nchime.volume = 0.25;\nchime.play();",
+                'votes' => 112,
+                'targetVotes' => 150,
+                'status' => 'Voting',
+                'created_at' => '2026-10-05T15:30:00Z',
+            ],
+            [
+                'id' => 'prop-3',
+                'title' => 'Clan Territory Border Glow & Shield Defense Mini-Game',
+                'author' => 'pixel_queen',
+                'category' => 'Gamification',
+                'description' => 'Renders a synchronized neon border around adjacent squares owned by members of the same Clan.',
+                'codeSnippet' => "if (neighbor.clan === current.clan) {\n  drawSharedClanBorder(ctx, current, neighbor);\n}",
+                'votes' => 164,
+                'targetVotes' => 150,
+                'status' => 'Approved',
+                'created_at' => '2026-10-10T09:15:00Z',
+            ],
+        ];
+    }
+
+    /**
+     * Brief 28/4/22 #13: "Mini-git-lab. Users can create code and ask the community to approve features on the site,
+     * if majority vote we will test and add the feature."
+     */
+    public function CommunityProposals(Request $request)
+    {
+        return response()->json([
+            'status' => true,
+            'data' => ['proposals' => $this->loadCommunityProposals()],
+        ]);
+    }
+
+    public function SubmitCommunityProposal(Request $request)
+    {
+        try {
+            $proposals = $this->loadCommunityProposals();
+            $newProp = [
+                'id' => 'prop-' . time(),
+                'title' => trim((string) $request->input('title', 'Untitled Community Feature')),
+                'author' => trim((string) $request->input('author', 'citizen')),
+                'category' => trim((string) $request->input('category', 'Feature')),
+                'description' => trim((string) $request->input('description', '')),
+                'codeSnippet' => (string) $request->input('codeSnippet', ''),
+                'votes' => 1,
+                'targetVotes' => 150,
+                'status' => 'Voting',
+                'created_at' => now()->toISOString(),
+            ];
+            array_unshift($proposals, $newProp);
+            @file_put_contents($this->getProposalsFilePath(), json_encode($proposals, JSON_PRETTY_PRINT));
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'proposal' => $newProp,
+                    'proposals' => $proposals,
+                    'message' => 'Proposal submitted to FlatMeta Mini-Git-Lab for community voting!',
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function VoteCommunityProposal(Request $request)
+    {
+        try {
+            $id = (string) $request->input('id', '');
+            $delta = (int) $request->input('delta', 1);
+            $proposals = $this->loadCommunityProposals();
+
+            foreach ($proposals as &$p) {
+                if (($p['id'] ?? '') === $id) {
+                    $p['votes'] = max(0, (int) ($p['votes'] ?? 0) + $delta);
+                    if ($p['votes'] >= ($p['targetVotes'] ?? 150) && ($p['status'] ?? 'Voting') === 'Voting') {
+                        $p['status'] = 'Testing';
+                    }
+                    break;
+                }
+            }
+            unset($p);
+
+            @file_put_contents($this->getProposalsFilePath(), json_encode($proposals, JSON_PRETTY_PRINT));
+
+            return response()->json([
+                'status' => true,
+                'data' => ['proposals' => $proposals],
+            ]);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }

@@ -28,6 +28,14 @@ class UserBoxesController extends Controller
 
             if (!empty($tilesData) && $tilesData->isNotEmpty()) {
                 foreach ($tilesData as $tiles) {
+                    $meta = [];
+                    if (!empty($tiles->order_log)) {
+                        $decoded = json_decode($tiles->order_log, true);
+                        if (is_array($decoded)) {
+                            $meta = $decoded;
+                        }
+                    }
+
                     $data['tiles'][] = [
                         'id' => $tiles->id,
                         'user_id' => $tiles->user_id,
@@ -35,6 +43,15 @@ class UserBoxesController extends Controller
                         'fullname' => $tiles->fullname ?? 'Metaverse Citizen',
                         'order_id' => $tiles->order_id,
                         'area_id' => $tiles->order_id,
+                        'area_title' => $meta['area_title'] ?? ($tiles->area_name ?: ''),
+                        'slug' => $meta['slug'] ?? '',
+                        'three_words' => $meta['three_words'] ?? '',
+                        'span_bounds' => $meta['span_bounds'] ?? null,
+                        'embed_url' => $meta['embed_url'] ?? '',
+                        'custom_code' => $meta['custom_code'] ?? '',
+                        'previous_image' => $meta['previous_image'] ?? '',
+                        'promoted' => (bool) ($meta['promoted'] ?? false),
+                        'views' => (int) ($meta['views'] ?? 0),
                         'lat' => (float) $tiles->lat,
                         'lng' => (float) $tiles->lng,
                         'image' => $this->formatTileImage($tiles->image, $baseUrl),

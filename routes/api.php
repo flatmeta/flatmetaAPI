@@ -36,6 +36,13 @@ $router->post('/ClaimTiles', 'App\Http\Controllers\OrdersController@ClaimTiles')
 $router->post('/BuyMarketplaceOrder', 'App\Http\Controllers\OrdersController@BuyMarketplaceOrder');
 $router->post('/ReleaseOrder', 'App\Http\Controllers\OrdersController@ReleaseOrder');
 $router->post('/RevertBoxImage', 'App\Http\Controllers\ImageController@RevertBoxImage');
+$router->post('/UpdateCustomDetailsPublic', 'App\Http\Controllers\OrdersController@UpdateCustomDetails');
+
+## Leaderboard, Clans & Community Mini-Git-Lab ##
+$router->get('/Leaderboard', 'App\Http\Controllers\OrdersController@Leaderboard');
+$router->get('/CommunityProposals', 'App\Http\Controllers\OrdersController@CommunityProposals');
+$router->post('/SubmitCommunityProposal', 'App\Http\Controllers\OrdersController@SubmitCommunityProposal');
+$router->post('/VoteCommunityProposal', 'App\Http\Controllers\OrdersController@VoteCommunityProposal');
 
 ## Password Recovery & Reporting ##
 $router->post('/ForgetPassword', 'App\Http\Controllers\UsersController@ForgetPassword');

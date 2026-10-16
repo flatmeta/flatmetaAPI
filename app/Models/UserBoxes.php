@@ -19,6 +19,8 @@ class UserBoxes extends Model
             'orders.sale_price',
             'orders.amount',
             'orders.no_of_tiles',
+            'orders.name as area_name',
+            'orders.log as order_log',
             'users.fullname',
             'users.username'
         )

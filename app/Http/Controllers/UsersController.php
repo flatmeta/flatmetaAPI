@@ -29,17 +29,43 @@ class UsersController extends Controller
         return $userfilePath . ltrim($image, '/');
     }
 
+    protected function getUserMetaMap(): array
+    {
+        $path = storage_path('app/user_meta.json');
+        if (file_exists($path)) {
+            $decoded = json_decode(file_get_contents($path), true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        return [];
+    }
+
+    protected function saveUserMeta(int $userId, array $updates): array
+    {
+        $map = $this->getUserMetaMap();
+        $key = (string) $userId;
+        $current = isset($map[$key]) && is_array($map[$key]) ? $map[$key] : [];
+        $map[$key] = array_merge($current, $updates);
+        @file_put_contents(storage_path('app/user_meta.json'), json_encode($map, JSON_PRETTY_PRINT));
+        return $map[$key];
+    }
+
     public function GetUserDetails(Request $request)
     {
         try {
             $userdata = $request->user();
 
             if (!empty($userdata)) {
+                $metaMap = $this->getUserMetaMap();
+                $meta = $metaMap[(string) $userdata['id']] ?? [];
                 $data = [
                     'user_id' => $userdata['id'],
                     'fullname' => $userdata['fullname'],
                     'email' => $userdata['email'],
                     'username' => $userdata['username'],
+                    'phone' => $meta['phone'] ?? '',
+                    'clan' => $meta['clan'] ?? 'Cyber Architects',
                     'user_image' => $this->formatUserImage($userdata['image'] ?? null),
                     'status' => $userdata['status'],
                 ];
@@ -80,6 +106,17 @@ class UsersController extends Controller
                 $user->image = $request->user_image;
             }
 
+            $metaUpdates = [];
+            if ($request->has('phone')) {
+                $metaUpdates['phone'] = trim((string) $request->input('phone', ''));
+            }
+            if ($request->has('clan')) {
+                $metaUpdates['clan'] = trim((string) $request->input('clan', 'Cyber Architects'));
+            }
+            $meta = !empty($metaUpdates)
+                ? $this->saveUserMeta((int) $user->id, $metaUpdates)
+                : ($this->getUserMetaMap()[(string) $user->id] ?? []);
+
             if ($user->save()) {
                 $updateduser = User::where('id', $user->id)->firstOrFail();
 
@@ -88,6 +125,8 @@ class UsersController extends Controller
                     'fullname' => $updateduser['fullname'],
                     'email' => $updateduser['email'],
                     'username' => $updateduser['username'],
+                    'phone' => $meta['phone'] ?? '',
+                    'clan' => $meta['clan'] ?? 'Cyber Architects',
                     'user_image' => $this->formatUserImage($updateduser['image'] ?? null),
                     'status' => $updateduser['status'],
                 ];

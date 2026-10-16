@@ -42,6 +42,17 @@ class ImageController extends Controller
 
             $UserBoxes = UserBoxes::where('order_id', $request->order_id)->get();
             if ($UserBoxes && $UserBoxes->isNotEmpty()) {
+                $firstOldImage = $UserBoxes->first()->image ?? '';
+                if (!empty($firstOldImage) && $firstOldImage !== $image) {
+                    $order = \App\Models\Orders::find($request->order_id);
+                    if ($order) {
+                        $meta = is_array(json_decode($order->log ?? '', true)) ? json_decode($order->log, true) : [];
+                        $meta['previous_image'] = $firstOldImage;
+                        $order->log = json_encode($meta);
+                        $order->save();
+                    }
+                }
+
                 foreach ($UserBoxes as $UserBox) {
                     $updateBox = UserBoxes::findOrFail($UserBox->id);
                     $updateBox->image = $image;
@@ -49,6 +60,7 @@ class ImageController extends Controller
                 }
 
                 $data['message'] = 'Image Updated Successfully.';
+                $data['previous_image'] = $firstOldImage;
                 return response()->json(['status' => true, 'data' => $data]);
             } else {
                 $data['message'] = 'No tiles found for the specified order_id.';
@@ -65,7 +77,16 @@ class ImageController extends Controller
     public function RevertBoxImage(Request $request)
     {
         try {
-            $previousImage = $request->input('previous_image', '');
+            $previousImage = $request->input('previous_image', null);
+            $order = \App\Models\Orders::find($request->order_id);
+            if ($previousImage === null && $order && !empty($order->log)) {
+                $meta = json_decode($order->log, true);
+                if (is_array($meta) && isset($meta['previous_image'])) {
+                    $previousImage = $meta['previous_image'];
+                }
+            }
+            $previousImage = $previousImage ?? '';
+
             $UserBoxes = UserBoxes::where('order_id', $request->order_id)->get();
             if ($UserBoxes && $UserBoxes->isNotEmpty()) {
                 foreach ($UserBoxes as $UserBox) {
@@ -74,7 +95,10 @@ class ImageController extends Controller
                 }
                 return response()->json([
                     'status' => true,
-                    'data' => ['message' => 'Land artwork reverted successfully.'],
+                    'data' => [
+                        'reverted_to' => $previousImage,
+                        'message' => 'Land artwork reverted successfully.',
+                    ],
                 ]);
             }
             return response()->json(['status' => false, 'message' => 'Order tiles not found']);
