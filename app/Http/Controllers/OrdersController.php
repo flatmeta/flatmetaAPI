@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\UserBoxes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 class OrdersController extends Controller
 {
@@ -50,31 +51,64 @@ class OrdersController extends Controller
         return is_array($decoded) ? $decoded : [];
     }
 
+    /**
+     * Owner-editable land details, validated. `promoted` and `views` are not
+     * accepted from owners: promotion is set by admins and views by visits.
+     * Throws \InvalidArgumentException with a message for the app when a value is rejected.
+     */
     protected function applyOrderMeta($order, Request $request): void
     {
         $meta = $this->decodeOrderMeta($order);
-        $metaKeys = [
-            'area_title',
-            'slug',
-            'three_words',
-            'span_bounds',
-            'embed_url',
-            'custom_code',
-            'previous_image',
-            'promoted',
-            'views',
-        ];
-        foreach ($metaKeys as $key) {
-            if ($request->has($key)) {
-                $meta[$key] = $request->input($key);
+
+        if ($request->has('area_title')) {
+            $title = mb_substr(trim(strip_tags((string) $request->input('area_title'))), 0, 120);
+            $meta['area_title'] = $title;
+            if ($title !== '') {
+                $order->name = mb_substr($title, 0, 190);
             }
         }
-        if ($request->has('area_title') && !empty($request->input('area_title'))) {
-            $order->name = substr((string) $request->input('area_title'), 0, 190);
+        if ($request->has('slug')) {
+            $slug = trim(preg_replace('/-+/', '-', preg_replace('/[^a-z0-9-]/', '-', strtolower((string) $request->input('slug')))), '-');
+            $slug = substr($slug, 0, 60);
+            if ($slug !== '' && $this->slugTaken($slug, $order->id)) {
+                throw new \InvalidArgumentException("flatmeta.io/u/{$slug} is already taken.");
+            }
+            $meta['slug'] = $slug;
         }
+        if ($request->has('three_words')) {
+            $words = strtolower(trim((string) $request->input('three_words')));
+            if ($words !== '' && !preg_match('/^[a-z0-9]{1,20}\.[a-z0-9]{1,20}\.[a-z0-9]{1,20}$/', $words)) {
+                throw new \InvalidArgumentException('A 3-word address looks like word.word.word');
+            }
+            $meta['three_words'] = $words;
+        }
+        if ($request->has('embed_url')) {
+            $url = trim((string) $request->input('embed_url'));
+            if ($url !== '' && (!preg_match('#^https://\S+$#i', $url) || strlen($url) > 2048)) {
+                throw new \InvalidArgumentException('Embed links must start with https://');
+            }
+            $meta['embed_url'] = $url;
+        }
+        if ($request->has('custom_code')) {
+            $meta['custom_code'] = mb_substr((string) $request->input('custom_code'), 0, 20000);
+        }
+        if ($request->has('span_bounds')) {
+            $span = $request->input('span_bounds');
+            $valid = is_array($span) && count(array_filter(['minGx', 'minGy', 'maxGx', 'maxGy'], fn ($k) => isset($span[$k]) && is_numeric($span[$k]))) === 4;
+            $meta['span_bounds'] = $valid ? array_map('intval', array_intersect_key($span, array_flip(['minGx', 'minGy', 'maxGx', 'maxGy']))) : null;
+        }
+
         if (!empty($meta)) {
             $order->log = json_encode($meta);
         }
+    }
+
+    protected function slugTaken(string $slug, $exceptOrderId = null): bool
+    {
+        return Orders::whereIn('status', ['0', '1'])
+            ->when($exceptOrderId, fn ($q) => $q->where('id', '!=', $exceptOrderId))
+            ->whereRaw("JSON_VALID(log) AND JSON_UNQUOTE(JSON_EXTRACT(log, '$.slug')) = ?", [$slug])
+            ->exists();
     }
 
     protected function cancelExistingSubscription(?string $subscriptionId, string $reason): bool
@@ -155,40 +189,92 @@ class OrdersController extends Controller
     }
 
     /**
+     * Returns the tiles (from $tiles) that are already taken by another order: an active one, or
+     * (when $includePending) a pending checkout started in the last 24 hours.
+     * Must be called inside a transaction; matching rows are locked.
+     */
+    protected function findTakenTiles(array $tiles, ?int $exceptOrderId = null, bool $includePending = true): array
+    {
+        $taken = [];
+        foreach ($tiles as $tile) {
+            $query = UserBoxes::join('orders', 'orders.id', '=', 'user_boxes.order_id')
+                ->whereRaw('user_boxes.lat + 0 = ?', [(float) $tile['lat']])
+                ->whereRaw('user_boxes.lng + 0 = ?', [(float) $tile['lng']])
+                ->where(function ($q) use ($includePending) {
+                    $q->where('orders.status', '1');
+                    if ($includePending) {
+                        $q->orWhere(function ($q) {
+                            $q->where('orders.status', '0')->where('orders.created_at', '>=', now()->subDay());
+                        });
+                    }
+                });
+            if ($exceptOrderId) {
+                $query->where('orders.id', '!=', $exceptOrderId);
+            }
+            if ($query->lockForUpdate()->exists()) {
+                $taken[] = $tile;
+            }
+        }
+        return $taken;
+    }
+
+    /**
+     * Signed, short-lived PayPal checkout link for $buyerId (the URL cannot be edited to pay for someone else).
+     */
+    protected function purchaseUrl(int $orderId, int $buyerId): string
+    {
+        return URL::temporarySignedRoute('PurchaseTile', now()->addHour(), ['id' => $orderId, 'userID' => $buyerId]);
+    }
+
+    /**
      * Claims tiles from Cart or direct payload, applying the 100 Free Squares quota
      * and $0.10/tile/month pricing beyond 100 squares.
      */
     public function BuyNow(Request $request)
     {
-        $userdata = $request->user();
-        $user_id = $userdata ? $userdata['id'] : (int) $request->user_id;
-
-        if (!$user_id) {
-            return response()->json(['status' => false, 'message' => 'User ID is required']);
-        }
+        $user_id = (int) $request->user()->id;
 
         DB::beginTransaction();
         try {
             $cartTiles = Cart::where('user_id', $user_id)->get();
             $requestedTiles = $request->input('tiles', []);
 
-            $tilesToClaim = [];
+            $candidates = [];
             if ($cartTiles->isNotEmpty()) {
                 foreach ($cartTiles as $ct) {
-                    $tilesToClaim[] = ['lat' => $ct->lat, 'lng' => $ct->lng];
+                    $candidates[] = ['lat' => $ct->lat, 'lng' => $ct->lng];
                 }
             } elseif (is_array($requestedTiles) && count($requestedTiles) > 0) {
                 foreach ($requestedTiles as $rt) {
                     if (isset($rt['lat']) && isset($rt['lng'])) {
-                        $tilesToClaim[] = ['lat' => $rt['lat'], 'lng' => $rt['lng']];
+                        $candidates[] = ['lat' => $rt['lat'], 'lng' => $rt['lng']];
                     }
                 }
             }
+
+            // Drop malformed and duplicate coordinates
+            $tilesToClaim = [];
+            foreach ($candidates as $tile) {
+                if (!is_numeric($tile['lat']) || !is_numeric($tile['lng'])) {
+                    continue;
+                }
+                $tilesToClaim[(float) $tile['lat'] . '|' . (float) $tile['lng']] = $tile;
+            }
+            $tilesToClaim = array_values($tilesToClaim);
 
             $count = count($tilesToClaim);
             if ($count === 0) {
                 DB::rollBack();
                 return response()->json(['status' => false, 'data' => ['message' => 'No tiles selected in cart.']]);
+            }
+
+            $taken = $this->findTakenTiles($tilesToClaim);
+            if (!empty($taken)) {
+                DB::rollBack();
+                return response()->json(['status' => false, 'data' => [
+                    'message' => count($taken) . ' of the selected square(s) are already claimed by another citizen.',
+                    'taken_tiles' => $taken,
+                ]]);
             }
 
             $alreadyOwned = $this->getOwnedTileCount((int) $user_id);
@@ -202,16 +288,20 @@ class OrdersController extends Controller
             $order->name = $request->input('area_title', 'Land Plot');
             $order->no_of_tiles = $count;
             $order->amount = $monthlyAmount;
-            $order->custom_details = $request->input('custom_details', '');
+            $order->custom_details = mb_substr((string) $request->input('custom_details', ''), 0, 20000);
             $order->on_sale = '0';
-            // Activate immediately when covered by 100 free quota (or instant claim)
-            $order->status = '1';
+            // Activate immediately only when fully covered by the 100 free quota; billable orders stay
+            // pending ('0') until TransactionCompleted confirms the PayPal subscription.
+            $order->status = $billableTiles > 0 ? '0' : '1';
             $order->next_due_date = date('Y-m-d H:i:s', strtotime(date('Y-m-d') . ' +1 month'));
             $order->next_expiry = date('Y-m-d H:i:s', strtotime($order->next_due_date . ' +10 day'));
             $this->applyOrderMeta($order, $request);
 
             if ($order->save()) {
-                $defaultImage = $request->input('image', '');
+                $defaultImage = (string) $request->input('image', '');
+                if (!preg_match('#^https?://\\S+$#i', $defaultImage) || strlen($defaultImage) > 2048) {
+                    $defaultImage = '';
+                }
                 foreach ($tilesToClaim as $tile) {
                     Cart::where('user_id', $user_id)
                         ->where('lat', $tile['lat'])
@@ -240,10 +330,10 @@ class OrdersController extends Controller
                     'billable_tiles' => $billableTiles,
                     'monthly_amount' => $monthlyAmount,
                     'free_claimed' => $billableTiles === 0,
-                    'url' => $billableTiles > 0 ? url('PurchaseTile/' . $order->id . '/' . $user_id) : null,
+                    'url' => $billableTiles > 0 ? $this->purchaseUrl((int) $order->id, $user_id) : null,
                     'message' => $billableTiles === 0
                         ? "Claimed {$count} square(s) using your 100 Free Squares quota!"
-                        : "Claimed {$count} square(s) (\${$monthlyAmount}/month subscription).",
+                        : "Reserved {$count} square(s). Complete the PayPal subscription (\${$monthlyAmount}/month) to activate them.",
                 ];
 
                 return response()->json(['status' => true, 'data' => $data]);
@@ -274,9 +364,9 @@ class OrdersController extends Controller
             $Orders = Orders::findOrFail($request->order_id);
 
             if (!empty($Orders)) {
-                if (!$userdata || $Orders->user_id == $userdata['id']) {
+                if ((int) $Orders->user_id === (int) $userdata['id']) {
                     if ($request->has('custom_details')) {
-                        $Orders->custom_details = $custom_details ?? '';
+                        $Orders->custom_details = mb_substr((string) ($custom_details ?? ''), 0, 20000);
                     }
                     if ($request->has('on_sale')) {
                         $Orders->on_sale = $request->on_sale ? '1' : '0';
@@ -308,7 +398,7 @@ class OrdersController extends Controller
             $Orders = Orders::findOrFail($request->order_id);
 
             if (!empty($Orders)) {
-                if (!$userdata || $Orders->user_id == $userdata['id']) {
+                if ((int) $Orders->user_id === (int) $userdata['id']) {
                     $Orders->sale_price = $sale_price;
                     $Orders->on_sale = $request->on_sale ? '1' : '0';
                     if ($request->has('custom_details')) {
@@ -330,78 +420,54 @@ class OrdersController extends Controller
     }
 
     /**
-     * Direct Marketplace Purchase with 10% Platform Commission, Seller Subscription Cancellation & OrderHistory logging
+     * Marketplace purchase with 10% Platform Commission.
+     * Ownership is NOT transferred here: the buyer gets a signed PayPal checkout link and the transfer
+     * (plus seller subscription cancellation & OrderHistory logging) happens in TransactionCompleted
+     * once PayPal confirms the subscription.
      * Brief [j] & [k]: "if sold subscription for sold tiles will cancel, remaining month will charge them, next month will not charge them"
      */
     public function BuyMarketplaceOrder(Request $request)
     {
-        $userdata = $request->user();
-        $buyerId = $userdata ? $userdata['id'] : (int) $request->buyer_user_id;
+        $buyerId = (int) $request->user()->id;
         $orderId = $request->order_id;
 
-        if (!$buyerId || !$orderId) {
-            return response()->json(['status' => false, 'message' => 'order_id and buyer_user_id are required']);
+        if (!$orderId) {
+            return response()->json(['status' => false, 'message' => 'order_id is required']);
         }
 
-        DB::beginTransaction();
         try {
             $order = Orders::findOrFail($orderId);
+
+            if ($order->status != '1' || $order->on_sale != '1') {
+                return response()->json(['status' => false, 'data' => ['message' => 'This land area is not for sale.']]);
+            }
+            if ((int) $order->user_id === $buyerId) {
+                return response()->json(['status' => false, 'data' => ['message' => 'You already own this land area.']]);
+            }
+
+            $pricePerTile = (float) $order->sale_price;
+            if ($pricePerTile <= 0) {
+                return response()->json(['status' => false, 'data' => ['message' => 'This listing has no valid sale price.']]);
+            }
+
             $tileCount = max(1, (int) $order->no_of_tiles);
-            $pricePerTile = (float) ($order->sale_price ?: $order->amount ?: 0.50);
             $totalPrice = round($tileCount * $pricePerTile, 2);
             $commission = round($totalPrice * self::PLATFORM_COMMISSION_RATE, 2);
             $sellerNet = round($totalPrice - $commission, 2);
-
-            $oldSubId = $order->subscription_id ?? null;
-            $subCancelled = $this->cancelExistingSubscription(
-                $oldSubId,
-                'Land area #' . $order->id . ' sold on FlatMeta Marketplace; seller recurring billing stopped for next cycle.'
-            );
-
-            $history = new OrderHistory();
-            $history->old_order_id = $order->id;
-            $history->user_id = $order->user_id;
-            $history->name = $order->name ?? ('Order #' . $order->id);
-            $history->no_of_tiles = $order->no_of_tiles;
-            $history->amount = $order->amount;
-            $history->custom_details = $order->custom_details;
-            $history->sale_price = $order->sale_price;
-            $history->log = json_encode([
-                'buyer_id' => $buyerId,
-                'total_paid' => $totalPrice,
-                'platform_commission_10pct' => $commission,
-                'seller_net_90pct' => $sellerNet,
-                'previous_subscription_id' => $oldSubId,
-                'seller_subscription_cancelled' => $subCancelled,
-                'transferred_at' => now()->toISOString(),
-            ]);
-            $history->next_due_date = $order->next_due_date;
-            $history->next_expiry = $order->next_expiry;
-            $history->save();
-
-            $order->user_id = $buyerId;
-            $order->amount = $totalPrice;
-            $order->sale_price = '0';
-            $order->on_sale = '0';
-            $order->status = '1';
-            $order->subscription_id = null;
-            $order->save();
-
-            DB::commit();
 
             return response()->json([
                 'status' => true,
                 'data' => [
                     'order_id' => $order->id,
-                    'total_paid' => $totalPrice,
+                    'requires_payment' => true,
+                    'url' => $this->purchaseUrl((int) $order->id, $buyerId),
+                    'total_price' => $totalPrice,
                     'commission' => $commission,
                     'seller_net' => $sellerNet,
-                    'seller_subscription_cancelled' => $subCancelled,
-                    'message' => "Land area acquired! Ownership transferred to Citizen #{$buyerId} (Seller recurring billing cancelled for next month).",
+                    'message' => 'Complete the PayPal checkout to take ownership of this land area.',
                 ],
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
     }
@@ -416,7 +482,7 @@ class OrdersController extends Controller
 
         try {
             $order = Orders::findOrFail($orderId);
-            if ($userdata && $order->user_id != $userdata['id']) {
+            if ((int) $order->user_id !== (int) $userdata['id']) {
                 return response()->json(['status' => false, 'message' => 'Unauthorized to release this land area']);
             }
 
@@ -462,7 +528,7 @@ class OrdersController extends Controller
     {
         try {
             $userdata = $request->user();
-            $userId = $userdata ? $userdata['id'] : $request->query('user_id');
+            $userId = $userdata['id'];
             $Orders = Orders::GetUserTilesByID($userId);
             $data = ['tiles' => []];
 
@@ -479,7 +545,7 @@ class OrdersController extends Controller
                 'free_quota_remaining' => max(0, self::FREE_TILE_QUOTA - $ownedCount),
                 'billable_tiles' => max(0, $ownedCount - self::FREE_TILE_QUOTA),
                 'monthly_subscription_usd' => round(max(0, $ownedCount - self::FREE_TILE_QUOTA) * self::PRICE_PER_TILE_MONTH, 2),
-            ];
+            ] + $this->tradeTotals((int) $userId);
 
             return response()->json(['status' => true, 'data' => $data]);
         } catch (\Exception $e) {
@@ -487,28 +553,53 @@ class OrdersController extends Controller
         }
     }
 
+    /**
+     * PayPal checkout. Reached only through a signed URL from BuyNow / BuyMarketplaceOrder, so $user_id
+     * (the buyer) cannot be changed by the client.
+     */
+    /** What a user has spent buying land and earned selling it on the marketplace. */
+    protected function tradeTotals(int $userId): array
+    {
+        $bought = 0.0;
+        $sold = 0.0;
+        $buyerPattern = '%"buyer_id":' . $userId . ',%';
+        $histories = OrderHistory::where('user_id', $userId)->orWhere('log', 'like', $buyerPattern)->get();
+        foreach ($histories as $h) {
+            $log = json_decode($h->log ?? '', true) ?: [];
+            $total = (float) ($log['total_paid'] ?? ((float) $h->no_of_tiles * (float) $h->sale_price));
+            if ((int) $h->user_id === $userId) {
+                $sold += (float) ($log['seller_net_90pct'] ?? $total * (1 - self::PLATFORM_COMMISSION_RATE));
+            }
+            if ((int) ($log['buyer_id'] ?? 0) === $userId) {
+                $bought += $total;
+            }
+        }
+        return ['bought_usd' => round($bought, 2), 'sold_usd' => round($sold, 2)];
+    }
+
     public function PurchaseTile($id, $user_id = null)
     {
         $Orders = Orders::findOrFail($id);
-        if (empty($user_id)) {
-            $user_id = $Orders->user_id;
-        }
-        $User = User::findOrFail($Orders->user_id);
+        $buyerId = (int) ($user_id ?: $Orders->user_id);
+        $User = User::findOrFail($buyerId);
 
-        if ($Orders->sale_price) {
+        if ($Orders->on_sale == '1' && (float) $Orders->sale_price > 0 && (int) $Orders->user_id !== $buyerId && $Orders->status == '1') {
             $quantity = max(1, (int) round($Orders->no_of_tiles * $Orders->sale_price * 10));
             $type = 'sale';
-        } else {
-            $alreadyOwned = $this->getOwnedTileCount((int) $user_id);
+        } elseif ((int) $Orders->user_id === $buyerId && $Orders->status != '1') {
+            $alreadyOwned = $this->getOwnedTileCount($buyerId);
             $billable = max(1, (int) $Orders->no_of_tiles - max(0, self::FREE_TILE_QUOTA - $alreadyOwned));
             $quantity = $billable;
             $type = 'new';
+        } else {
+            abort(404, 'This land area is not available for purchase.');
         }
 
         DB::beginTransaction();
         try {
+            $planId = env('PLAN_ID', 'P-1G766395YH0963631MKLR5GI');
             $data = [
-                'plan_id' => env('PLAN_ID', 'P-1G766395YH0963631MKLR5GI'),
+                'plan_id' => $planId,
                 'quantity' => $quantity,
                 'start_time' => Carbon::now()->addSeconds(10),
                 'subscriber' => [
@@ -524,16 +615,28 @@ class OrdersController extends Controller
                         'payer_selected' => 'PAYPAL',
                         'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED',
                     ],
-                    'return_url' => url('TransactionCompleted/' . $id . '/' . $type . '/' . $user_id),
+                    'return_url' => url('TransactionCompleted/' . $id . '/' . $type),
                     'cancel_url' => url('TransactionCancel/' . $id),
                 ],
             ];
 
             $paypal = new PaypalController();
             $subscribe = $paypal->subscribe($data);
-            if (!isset($subscribe->debug_id) && isset($subscribe->links)) {
+            if (!isset($subscribe->debug_id) && isset($subscribe->links) && !empty($subscribe->id)) {
                 foreach ($subscribe->links as $link) {
                     if ($link->rel == 'approve') {
+                        // Remember which subscription belongs to which buyer/order; TransactionCompleted
+                        // only accepts a subscription_id recorded here.
+                        $meta = $this->decodeOrderMeta($Orders);
+                        $meta['pending_subscriptions'][$subscribe->id] = [
+                            'type' => $type,
+                            'buyer_id' => $buyerId,
+                            'plan_id' => $planId,
+                            'quantity' => $quantity,
+                            'created_at' => now()->toISOString(),
+                        ];
+                        $Orders->log = json_encode($meta);
+                        $Orders->save();
                         DB::commit();
                         return redirect($link->href);
                     }
@@ -625,96 +728,141 @@ class OrdersController extends Controller
         print_r($package);
     }
 
-    public function TransactionCompleted(Request $request, $id, $type, $userID)
+    /**
+     * PayPal return URL. The subscription_id must be one PurchaseTile recorded for this order, it must be
+     * ACTIVE with the expected plan and quantity, and the buyer comes from that record (not the URL).
+     */
+    public function TransactionCompleted(Request $request, $id, $type = null, $userID = null)
     {
-        if (!empty($request['subscription_id'])) {
-            $paypal = new PaypalController();
-            $subscription_response = $paypal->get_subscription($request['subscription_id']);
+        $subscriptionId = (string) ($request['subscription_id'] ?? '');
+        if ($subscriptionId === '') {
+            return response()->json(['status' => false, 'data' => ['message' => 'Missing subscription.']]);
+        }
 
-            if ($subscription_response && $subscription_response->status == 'ACTIVE') {
-                if ($type != 'sale') {
-                    $Orders = Orders::findOrFail($id);
-                    $meta = $this->decodeOrderMeta($Orders);
-                    $meta['paypal_subscription'] = $subscription_response;
-                    $Orders->status = '1';
-                    $Orders->subscription_id = $request['subscription_id'];
+        DB::beginTransaction();
+        try {
+            $Orders = Orders::lockForUpdate()->findOrFail($id);
+            $meta = $this->decodeOrderMeta($Orders);
+            $pending = $meta['pending_subscriptions'][$subscriptionId] ?? null;
+            if (!$pending) {
+                DB::rollBack();
+                return response()->json(['status' => false, 'data' => ['message' => 'Unknown subscription for this order.']]);
+            }
+
+            $paypal = new PaypalController();
+            $subscription_response = $paypal->get_subscription($subscriptionId);
+            if (
+                !$subscription_response
+                || ($subscription_response->status ?? '') !== 'ACTIVE'
+                || ($subscription_response->plan_id ?? '') !== $pending['plan_id']
+                || (int) ($subscription_response->quantity ?? 0) !== (int) $pending['quantity']
+            ) {
+                DB::rollBack();
+                return response()->json(['status' => false, 'data' => ['message' => 'Subscription is not active.']]);
+            }
+
+            // Single use
+            unset($meta['pending_subscriptions'][$subscriptionId]);
+            $buyerId = (int) $pending['buyer_id'];
+
+            if ($pending['type'] !== 'sale') {
+                $myTiles = UserBoxes::where('order_id', $Orders->id)->get(['lat', 'lng'])->toArray();
+                if ((int) $Orders->user_id !== $buyerId || !empty($this->findTakenTiles($myTiles, (int) $Orders->id, false))) {
+                    $this->cancelExistingSubscription($subscriptionId, 'Squares for order #' . $Orders->id . ' were no longer available.');
+                    $Orders->status = '2';
                     $Orders->log = json_encode($meta);
                     $Orders->save();
-                } else {
-                    $Orders = Orders::findOrFail($id);
-                    $totalAmount = $Orders->no_of_tiles * $Orders->sale_price;
-                    $commission = round($totalAmount * self::PLATFORM_COMMISSION_RATE, 2);
-
-                    // Brief [j] & [k]: Cancel previous owner's subscription so next month will not charge them
-                    $oldSubscriptionId = $Orders->subscription_id ?? null;
-                    $subCancelled = $this->cancelExistingSubscription(
-                        $oldSubscriptionId,
-                        'Land area #' . $Orders->id . ' resold on FlatMeta; previous subscription cancelled for next cycle.'
-                    );
-
-                    $OrderHistory = new OrderHistory();
-                    $OrderHistory->old_order_id = $Orders->id;
-                    $OrderHistory->user_id = $Orders->user_id;
-                    $OrderHistory->name = $Orders->name;
-                    $OrderHistory->no_of_tiles = $Orders->no_of_tiles;
-                    $OrderHistory->amount = $Orders->amount;
-                    $OrderHistory->custom_details = $Orders->custom_details;
-                    $OrderHistory->sale_price = $Orders->sale_price;
-                    $OrderHistory->log = json_encode([
-                        'paypal' => $subscription_response,
-                        'platform_commission_10pct' => $commission,
-                        'seller_net_90pct' => round($totalAmount - $commission, 2),
-                        'previous_subscription_id' => $oldSubscriptionId,
-                        'seller_subscription_cancelled' => $subCancelled,
-                    ]);
-                    $OrderHistory->next_due_date = $Orders->next_due_date;
-                    $OrderHistory->next_expiry = $Orders->next_expiry;
-
-                    if ($OrderHistory->save()) {
-                        $meta = $this->decodeOrderMeta($Orders);
-                        $meta['paypal_subscription'] = $subscription_response;
-                        $Orders->user_id = $userID;
-                        $Orders->amount = $totalAmount;
-                        $Orders->sale_price = '';
-                        $Orders->on_sale = '0';
-                        $Orders->status = '1';
-                        $Orders->subscription_id = $request['subscription_id'];
-                        $Orders->log = json_encode($meta);
-                        $Orders->save();
-                    }
+                    DB::commit();
+                    return response()->json(['status' => false, 'data' => ['message' => 'These squares were claimed by someone else. Your subscription was cancelled.']]);
                 }
 
-                if ($type != 'sale') {
-                    $tiles = Cart::where('user_id', $Orders->user_id)->get();
-                    foreach ($tiles as $tile) {
-                        Cart::where('lat', $tile['lat'])->where('lng', $tile['lng'])->delete();
-
-                        $UserBoxes = new UserBoxes();
-                        $UserBoxes->order_id = $Orders->id;
-                        $UserBoxes->lat = $tile['lat'];
-                        $UserBoxes->lng = $tile['lng'];
-                        $UserBoxes->price = (string) self::PRICE_PER_TILE_MONTH;
-                        $UserBoxes->save();
-                    }
+                $meta['paypal_subscription'] = $subscription_response;
+                $Orders->status = '1';
+                $Orders->subscription_id = $subscriptionId;
+                $Orders->log = json_encode($meta);
+                $Orders->save();
+            } else {
+                if ($Orders->status != '1' || $Orders->on_sale != '1' || (int) $Orders->user_id === $buyerId) {
+                    $this->cancelExistingSubscription($subscriptionId, 'Land area #' . $Orders->id . ' was no longer for sale.');
+                    $Orders->log = json_encode($meta);
+                    $Orders->save();
+                    DB::commit();
+                    return response()->json(['status' => false, 'data' => ['message' => 'This land area is no longer for sale. Your subscription was cancelled.']]);
                 }
 
-                $redirectUrl = $this->baseUrl() . 'flatmeta/thankyou';
-                return redirect()->to($redirectUrl);
+                $totalAmount = $Orders->no_of_tiles * $Orders->sale_price;
+                $commission = round($totalAmount * self::PLATFORM_COMMISSION_RATE, 2);
+
+                // Brief [j] & [k]: Cancel previous owner's subscription so next month will not charge them
+                $oldSubscriptionId = $Orders->subscription_id ?? null;
+                $subCancelled = $this->cancelExistingSubscription(
+                    $oldSubscriptionId,
+                    'Land area #' . $Orders->id . ' resold on FlatMeta; previous subscription cancelled for next cycle.'
+                );
+
+                $OrderHistory = new OrderHistory();
+                $OrderHistory->old_order_id = $Orders->id;
+                $OrderHistory->user_id = $Orders->user_id;
+                $OrderHistory->name = $Orders->name;
+                $OrderHistory->no_of_tiles = $Orders->no_of_tiles;
+                $OrderHistory->amount = $Orders->amount;
+                $OrderHistory->custom_details = $Orders->custom_details;
+                $OrderHistory->sale_price = $Orders->sale_price;
+                $OrderHistory->log = json_encode([
+                    'paypal' => $subscription_response,
+                    'buyer_id' => $buyerId,
+                    'platform_commission_10pct' => $commission,
+                    'seller_net_90pct' => round($totalAmount - $commission, 2),
+                    'previous_subscription_id' => $oldSubscriptionId,
+                    'seller_subscription_cancelled' => $subCancelled,
+                ]);
+                $OrderHistory->next_due_date = $Orders->next_due_date;
+                $OrderHistory->next_expiry = $Orders->next_expiry;
+                $OrderHistory->save();
+
+                $meta['paypal_subscription'] = $subscription_response;
+                $Orders->user_id = $buyerId;
+                $Orders->amount = $totalAmount;
+                $Orders->sale_price = '';
+                $Orders->on_sale = '0';
+                $Orders->status = '1';
+                $Orders->subscription_id = $subscriptionId;
+                $Orders->log = json_encode($meta);
+                $Orders->save();
             }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
+
+        // Back to the app (not the API host) after PayPal.
+        $redirectUrl = rtrim(config('app.frontend_url'), '/') . '/thankyou';
+        return redirect()->to($redirectUrl);
     }
 
+    /**
+     * PayPal cancel URL. Only a pending (unpaid) order is marked cancelled; active orders and
+     * marketplace listings are never touched from here.
+     */
     public function TransactionCancel(Request $request, $id)
     {
         $Orders = Orders::findOrFail($id);
 
-        if (!empty($Orders)) {
-            $Orders->status = '2';
-            $Orders->save();
-
-            $data['message'] = 'Transaction Cancelled. Please Try Again.';
-            return response()->json(['status' => true, 'data' => $data]);
+        $meta = $this->decodeOrderMeta($Orders);
+        $subscriptionId = (string) ($request['subscription_id'] ?? '');
+        if ($subscriptionId !== '' && isset($meta['pending_subscriptions'][$subscriptionId])) {
+            unset($meta['pending_subscriptions'][$subscriptionId]);
+            $Orders->log = json_encode($meta);
         }
+        if ($Orders->status == '0') {
+            $Orders->status = '2';
+        }
+        $Orders->save();
+
+        $data['message'] = 'Transaction Cancelled. Please Try Again.';
+        return response()->json(['status' => true, 'data' => $data]);
     }
 
     public function UpdatePlanPricing(Request $request, $id) {}
@@ -802,12 +950,26 @@ class OrdersController extends Controller
                 ->limit(15)
                 ->get();
 
-            $clans = [
-                ['name' => 'Cyber Architects', 'badge' => '⚡', 'members' => 42, 'tiles' => 1480, 'color' => '#06b6d4'],
-                ['name' => 'Emerald Guardians', 'badge' => '🌿', 'members' => 38, 'tiles' => 1260, 'color' => '#10b981'],
-                ['name' => 'Solar Pioneers', 'badge' => '☀️', 'members' => 31, 'tiles' => 980, 'color' => '#f59e0b'],
-                ['name' => 'Royal Knights', 'badge' => '🛡️', 'members' => 29, 'tiles' => 845, 'color' => '#8b5cf6'],
-            ];
+            // Clan standings from real members and the land they hold.
+            $clans = [];
+            foreach (User::CLANS as $name => $style) {
+                $memberIds = User::where('status', '!=', '3')
+                    ->where(function ($q) use ($name) {
+                        $q->where('clan', $name);
+                        if ($name === User::DEFAULT_CLAN) {
+                            $q->orWhereNull('clan');
+                        }
+                    })
+                    ->pluck('id');
+                $clans[] = [
+                    'name' => $name,
+                    'badge' => $style['badge'],
+                    'color' => $style['color'],
+                    'members' => $memberIds->count(),
+                    'tiles' => (int) Orders::whereIn('user_id', $memberIds)->where('status', '1')->sum('no_of_tiles'),
+                ];
+            }
+            usort($clans, fn ($a, $b) => $b['tiles'] <=> $a['tiles'] ?: $b['members'] <=> $a['members']);
 
             return response()->json([
                 'status' => true,
@@ -831,48 +993,11 @@ class OrdersController extends Controller
         $path = $this->getProposalsFilePath();
         if (file_exists($path)) {
             $decoded = json_decode(file_get_contents($path), true);
-            if (is_array($decoded) && count($decoded) > 0) {
+            if (is_array($decoded)) {
                 return $decoded;
             }
         }
-        return [
-            [
-                'id' => 'prop-1',
-                'title' => 'Interactive Weather & Day/Night Map Shader',
-                'author' => 'alex_meta',
-                'category' => 'Map Engine',
-                'description' => 'Syncs map lighting and ambient particle effects with real-world local time at the inspected coordinates.',
-                'codeSnippet' => "const hour = new Date().getUTCHours();\nctx.fillStyle = (hour < 6 || hour > 20) ? 'rgba(15, 23, 42, 0.28)' : 'transparent';",
-                'votes' => 148,
-                'targetVotes' => 150,
-                'status' => 'Testing',
-                'created_at' => '2026-10-01T12:00:00Z',
-            ],
-            [
-                'id' => 'prop-2',
-                'title' => 'Tile Audio Ambience & Spatial Soundscapes',
-                'author' => 'sound_weaver',
-                'category' => 'Personalisation',
-                'description' => 'Allows land owners to attach a looping ambient audio stream or chime when an avatar walks onto their square.',
-                'codeSnippet' => "const chime = new Audio(area.ambientAudioUrl);\nchime.volume = 0.25;\nchime.play();",
-                'votes' => 112,
-                'targetVotes' => 150,
-                'status' => 'Voting',
-                'created_at' => '2026-10-05T15:30:00Z',
-            ],
-            [
-                'id' => 'prop-3',
-                'title' => 'Clan Territory Border Glow & Shield Defense Mini-Game',
-                'author' => 'pixel_queen',
-                'category' => 'Gamification',
-                'description' => 'Renders a synchronized neon border around adjacent squares owned by members of the same Clan.',
-                'codeSnippet' => "if (neighbor.clan === current.clan) {\n  drawSharedClanBorder(ctx, current, neighbor);\n}",
-                'votes' => 164,
-                'targetVotes' => 150,
-                'status' => 'Approved',
-                'created_at' => '2026-10-10T09:15:00Z',
-            ],
-        ];
+        return [];
     }
 
     /**
@@ -894,7 +1019,7 @@ class OrdersController extends Controller
             $newProp = [
                 'id' => 'prop-' . time(),
                 'title' => trim((string) $request->input('title', 'Untitled Community Feature')),
-                'author' => trim((string) $request->input('author', 'citizen')),
+                'author' => (string) $request->user()->username,
                 'category' => trim((string) $request->input('category', 'Feature')),
                 'description' => trim((string) $request->input('description', '')),
                 'codeSnippet' => (string) $request->input('codeSnippet', ''),
@@ -923,12 +1048,19 @@ class OrdersController extends Controller
     {
         try {
             $id = (string) $request->input('id', '');
-            $delta = (int) $request->input('delta', 1);
+            // One vote per user per proposal: +1, -1 or 0 (withdraw). Re-voting replaces the previous vote.
+            $delta = max(-1, min(1, (int) $request->input('delta', 1)));
+            $userKey = (string) $request->user()->id;
             $proposals = $this->loadCommunityProposals();
+
+            $votesPath = storage_path('app/community_votes.json');
+            $votes = file_exists($votesPath) ? (json_decode(file_get_contents($votesPath), true) ?: []) : [];
+            $previous = (int) ($votes[$id][$userKey] ?? 0);
+            $votes[$id][$userKey] = $delta;
 
             foreach ($proposals as &$p) {
                 if (($p['id'] ?? '') === $id) {
-                    $p['votes'] = max(0, (int) ($p['votes'] ?? 0) + $delta);
+                    $p['votes'] = max(0, (int) ($p['votes'] ?? 0) + $delta - $previous);
                     if ($p['votes'] >= ($p['targetVotes'] ?? 150) && ($p['status'] ?? 'Voting') === 'Voting') {
                         $p['status'] = 'Testing';
                     }
@@ -938,6 +1070,7 @@ class OrdersController extends Controller
             unset($p);
 
             @file_put_contents($this->getProposalsFilePath(), json_encode($proposals, JSON_PRETTY_PRINT));
+            @file_put_contents($votesPath, json_encode($votes, JSON_PRETTY_PRINT));
 
             return response()->json([
                 'status' => true,

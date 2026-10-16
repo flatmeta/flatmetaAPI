@@ -23,20 +23,25 @@ Route::get('/', function () {
     return view('auth.login'); 
 });
 
-Route::any('/CreateProd', 'App\Http\Controllers\OrdersController@CreateProd');
-Route::any('/CreatePlan', 'App\Http\Controllers\OrdersController@CreatePlan');
-Route::any('/PurchaseTile/{id}/{userID?}', 'App\Http\Controllers\OrdersController@PurchaseTile');
-Route::any('/GetProdById', 'App\Http\Controllers\OrdersController@GetProdById');
-Route::any('/GetPlanById', 'App\Http\Controllers\OrdersController@GetPlanById');
-Route::any('/GetAllProducts', 'App\Http\Controllers\OrdersController@GetAllProducts');
+## PayPal checkout (links are signed by the API, so the buyer id cannot be changed) ##
+Route::any('/PurchaseTile/{id}/{userID?}', 'App\Http\Controllers\OrdersController@PurchaseTile')
+    ->middleware('signed')
+    ->name('PurchaseTile');
+Route::any('/TransactionCompleted/{id}/{type}/{userID?}', 'App\Http\Controllers\OrdersController@TransactionCompleted');
+Route::any('/TransactionCancel/{id}', 'App\Http\Controllers\OrdersController@TransactionCancel');
 
-Route::any('/GetSubscriptionsDetails', 'App\Http\Controllers\OrdersController@GetSubscriptionsDetails');
+Auth::routes(['register' => false]);
 
-Route::any('/TransactionCompleted/{id}/{type}/{userID}', 'App\Http\Controllers\OrdersController@TransactionCompleted');
+Route::group(['middleware' => ['auth', 'admin']], function () { 
 
-Auth::routes();
-
-Route::group(['middleware' => ['auth']], function () { 
+    ## PayPal setup / debug helpers & one-off seeding ##
+    Route::any('/CreateProd', 'App\Http\Controllers\OrdersController@CreateProd');
+    Route::any('/CreatePlan', 'App\Http\Controllers\OrdersController@CreatePlan');
+    Route::any('/GetProdById', 'App\Http\Controllers\OrdersController@GetProdById');
+    Route::any('/GetPlanById', 'App\Http\Controllers\OrdersController@GetPlanById');
+    Route::any('/GetAllProducts', 'App\Http\Controllers\OrdersController@GetAllProducts');
+    Route::any('/GetSubscriptionsDetails', 'App\Http\Controllers\OrdersController@GetSubscriptionsDetails');
+    Route::any('/AddNewImages', 'App\Http\Controllers\ImageController@AddNewImages');
 
     Route::get('/home/{type?}/{date?}', [HomeController::class, 'index'])->name('home');
 

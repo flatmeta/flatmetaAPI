@@ -6,11 +6,17 @@ use App\Models\User;
 use App\Models\UserBoxes;
 use Illuminate\Http\Request;
 use App\Models\UserFollowers;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 
 class UsersController extends Controller
 {
+    const RASTER_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
     protected function baseUrl(): string
     {
         $base = config('app.url') ?: env('APP_URL', url('/'));
@@ -29,112 +35,48 @@ class UsersController extends Controller
         return $userfilePath . ltrim($image, '/');
     }
 
-    protected function getUserMetaMap(): array
-    {
-        $path = storage_path('app/user_meta.json');
-        if (file_exists($path)) {
-            $decoded = json_decode(file_get_contents($path), true);
-            if (is_array($decoded)) {
-                return $decoded;
-            }
-        }
-        return [];
-    }
-
-    protected function saveUserMeta(int $userId, array $updates): array
-    {
-        $map = $this->getUserMetaMap();
-        $key = (string) $userId;
-        $current = isset($map[$key]) && is_array($map[$key]) ? $map[$key] : [];
-        $map[$key] = array_merge($current, $updates);
-        @file_put_contents(storage_path('app/user_meta.json'), json_encode($map, JSON_PRETTY_PRINT));
-        return $map[$key];
-    }
-
     public function GetUserDetails(Request $request)
     {
-        try {
-            $userdata = $request->user();
-
-            if (!empty($userdata)) {
-                $metaMap = $this->getUserMetaMap();
-                $meta = $metaMap[(string) $userdata['id']] ?? [];
-                $data = [
-                    'user_id' => $userdata['id'],
-                    'fullname' => $userdata['fullname'],
-                    'email' => $userdata['email'],
-                    'username' => $userdata['username'],
-                    'phone' => $meta['phone'] ?? '',
-                    'clan' => $meta['clan'] ?? 'Cyber Architects',
-                    'user_image' => $this->formatUserImage($userdata['image'] ?? null),
-                    'status' => $userdata['status'],
-                ];
-
-                return response()->json(['status' => true, 'data' => $data]);
-            } else {
-                $data['message'] = 'Please login to continue';
-                return response()->json(['status' => false, 'data' => $data]);
-            }
-        } catch (BadRequestException $e) {
-            return response()->json(['status' => false, 'message' => $e->getMessage()]);
-        }
+        return response()->json(['status' => true, 'data' => $request->user()->apiPayload()]);
     }
 
+    /**
+     * Profile edits from the app. Email can't be changed here (that would skip
+     * verification) and the photo only changes through UploadUserImage.
+     */
     public function UpdateUser(Request $request)
     {
         try {
-            $userdata = $request->user();
-            $userId = $userdata ? $userdata->id : $request->user_id;
-            $user = User::where('id', $userId)->firstOrFail();
+            $user = User::findOrFail($request->user()->id);
 
-            if (!empty($request->fullname)) {
-                $user->fullname = trim($request->fullname);
+            if ($request->filled('fullname')) {
+                $user->fullname = mb_substr(trim(strip_tags((string) $request->fullname)), 0, 50);
             }
-            if (!empty($request->username)) {
-                $cleanUsername = strtolower(preg_replace('/[^0-9a-zA-Z_]/', '', $request->username));
-                if (!empty($cleanUsername)) {
-                    $user->username = $cleanUsername;
+            if ($request->filled('username')) {
+                $clean = substr(strtolower(preg_replace('/[^0-9a-zA-Z_]/', '', (string) $request->username)), 0, 30);
+                if ($clean !== '' && $clean !== $user->username) {
+                    if (User::where('username', $clean)->where('id', '!=', $user->id)->exists()) {
+                        return response()->json(['status' => false, 'message' => "The username @{$clean} is taken."]);
+                    }
+                    $user->username = $clean;
                 }
             }
-            if (!empty($request->email) && filter_var($request->email, FILTER_VALIDATE_EMAIL)) {
-                $existing = User::where('email', $request->email)->where('id', '!=', $user->id)->exists();
-                if (!$existing) {
-                    $user->email = strtolower(trim($request->email));
-                }
-            }
-            if (!empty($request->user_image)) {
-                $user->image = $request->user_image;
-            }
-
-            $metaUpdates = [];
             if ($request->has('phone')) {
-                $metaUpdates['phone'] = trim((string) $request->input('phone', ''));
+                $user->phone = substr(preg_replace('/[^0-9+()\- ]/', '', (string) $request->phone), 0, 30) ?: null;
             }
-            if ($request->has('clan')) {
-                $metaUpdates['clan'] = trim((string) $request->input('clan', 'Cyber Architects'));
+            if ($request->filled('clan')) {
+                if (!array_key_exists($request->clan, User::CLANS)) {
+                    return response()->json(['status' => false, 'message' => 'Unknown clan.']);
+                }
+                $user->clan = $request->clan;
             }
-            $meta = !empty($metaUpdates)
-                ? $this->saveUserMeta((int) $user->id, $metaUpdates)
-                : ($this->getUserMetaMap()[(string) $user->id] ?? []);
-
-            if ($user->save()) {
-                $updateduser = User::where('id', $user->id)->firstOrFail();
-
-                $data = [
-                    'user_id' => $updateduser['id'],
-                    'fullname' => $updateduser['fullname'],
-                    'email' => $updateduser['email'],
-                    'username' => $updateduser['username'],
-                    'phone' => $meta['phone'] ?? '',
-                    'clan' => $meta['clan'] ?? 'Cyber Architects',
-                    'user_image' => $this->formatUserImage($updateduser['image'] ?? null),
-                    'status' => $updateduser['status'],
-                ];
-
-                return response()->json(['status' => true, 'data' => $data]);
+            if ($request->has('avatar_config')) {
+                $config = User::cleanAvatarConfig($request->avatar_config);
+                $user->avatar_config = $config ? json_encode($config) : null;
             }
 
-            return response()->json(['status' => false, 'message' => 'Could not update user']);
+            $user->save();
+            return response()->json(['status' => true, 'data' => $user->fresh()->apiPayload()]);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
@@ -143,22 +85,20 @@ class UsersController extends Controller
     public function UploadUserImage(Request $request)
     {
         try {
-            $userdt = $request->user();
-            $userId = $userdt ? $userdt->id : $request->user_id;
-            $userdata = User::where('id', $userId)->firstOrFail();
+            $userdata = User::where('id', $request->user()->id)->firstOrFail();
 
             if (!$request->hasFile('images')) {
                 return response()->json(['status' => false, 'data' => ['message' => 'No image file provided']]);
             }
 
-            $allowedfileExtension = ['svg', 'jpg', 'JPG', 'jpeg', 'png', 'gif', 'webp'];
+            // Raster images only (SVG can carry script and is served from the API origin), max 5 MB.
+            $validator = Validator::make($request->all(), ['images' => 'file|max:5120|mimes:jpg,jpeg,png,gif,webp']);
             $file = $request->file('images');
+            // Extension comes from the detected content type, never from the client file name.
+            $extension = $file->guessExtension();
 
-            $safeOriginal = preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
-            $filename = 'fm_user' . date('YmdHis') . '_' . $safeOriginal;
-            $extension = strtolower($file->getClientOriginalExtension());
-
-            if (in_array($extension, $allowedfileExtension)) {
+            if (!$validator->fails() && in_array($extension, self::RASTER_IMAGE_EXTENSIONS, true)) {
+                $filename = 'fm_user' . date('YmdHis') . '_' . bin2hex(random_bytes(6)) . '.' . $extension;
                 $uploadDir = 'assets/uploads/users/';
                 if (!file_exists($uploadDir)) {
                     @mkdir($uploadDir, 0755, true);
@@ -174,7 +114,7 @@ class UsersController extends Controller
 
                 return response()->json(['status' => true, 'data' => $data]);
             } else {
-                $data['message'] = 'Unsupported Media Type';
+                $data['message'] = 'Unsupported Media Type (JPG, PNG, GIF or WEBP up to 5 MB)';
                 return response()->json(['status' => false, 'data' => $data]);
             }
         } catch (\Exception $e) {
@@ -242,17 +182,64 @@ class UsersController extends Controller
         }
     }
 
+    /**
+     * Checks a password reset code for the given user. Codes are stored hashed, expire
+     * after 60 minutes and are invalidated after 5 wrong attempts.
+     */
+    protected function checkPasswordResetCode(?User $user, $code): bool
+    {
+        $code = trim((string) $code);
+        if (!$user || $code === '' || empty($user->verification_code) || empty($user->verification_code_expires_at)) {
+            return false;
+        }
+
+        if (now()->greaterThan($user->verification_code_expires_at)) {
+            $this->clearPasswordResetCode($user);
+            return false;
+        }
+
+        if (Hash::check($code, $user->verification_code)) {
+            return true;
+        }
+
+        $user->verification_attempts = (int) $user->verification_attempts + 1;
+        if ($user->verification_attempts >= 5) {
+            $this->clearPasswordResetCode($user);
+        } else {
+            $user->save();
+        }
+        return false;
+    }
+
+    protected function clearPasswordResetCode(User $user): void
+    {
+        $user->verification_code = null;
+        $user->verification_code_expires_at = null;
+        $user->verification_attempts = 0;
+        $user->save();
+    }
+
     public function ForgetPassword(Request $request)
     {
         try {
-            $user = User::where('email', $request->email)->first();
+            $email = strtolower(trim((string) $request->email));
+            $user = User::where('email', $email)->first();
 
             if (empty($user)) {
                 $data['message'] = 'User not found.';
                 return response()->json(['status' => false, 'data' => $data]);
             } else {
-                $verification_code = random_int(1000, 9999);
-                $user->verification_code = $verification_code;
+                $limiterKey = 'password-reset-send:' . sha1($email);
+                if (RateLimiter::tooManyAttempts($limiterKey, 5)) {
+                    $data['message'] = 'Too many reset requests. Try again in ' . RateLimiter::availableIn($limiterKey) . ' seconds.';
+                    return response()->json(['status' => false, 'data' => $data]);
+                }
+                RateLimiter::hit($limiterKey, 900);
+
+                $verification_code = (string) random_int(1000, 9999);
+                $user->verification_code = Hash::make($verification_code);
+                $user->verification_code_expires_at = now()->addMinutes(60);
+                $user->verification_attempts = 0;
                 $user->save();
 
                 $details = [
@@ -260,11 +247,11 @@ class UsersController extends Controller
                     'heading' => 'Reset Password',
                     'text_one' => 'You are receiving this email because we received a password reset request for your account.',
                     'button_text' => $verification_code,
-                    'text_two' => 'This password reset link will expire in 60 minutes',
+                    'text_two' => 'This password reset code will expire in 60 minutes',
                     'text_three' => 'If you did not request a password reset, no further action is required.',
                 ];
 
-                @Mail::to($request->email)->send(new \App\Mail\ValidateUser($details));
+                Mail::to($user->email)->send(new \App\Mail\ValidateUser($details));
 
                 $data['message'] = 'Email sent successfully.';
                 return response()->json(['status' => true, 'data' => $data]);
@@ -277,15 +264,14 @@ class UsersController extends Controller
     public function VerifyForgetPasswordCode(Request $request)
     {
         try {
-            if (!empty($request->verification_code)) {
-                $user = User::where('verification_code', $request->verification_code)->first();
+            $email = strtolower(trim((string) $request->email));
+            $user = $email !== '' ? User::where('email', $email)->first() : null;
 
-                if (!empty($user) && $user->verification_code == $request->verification_code) {
-                    $data['email'] = $user->email;
-                    $data['verification_code'] = $user->verification_code;
-                    $data['message'] = 'User Validated Successfully.';
-                    return response()->json(['status' => true, 'data' => $data]);
-                }
+            if ($this->checkPasswordResetCode($user, $request->verification_code)) {
+                $data['email'] = $user->email;
+                $data['verification_code'] = trim((string) $request->verification_code);
+                $data['message'] = 'User Validated Successfully.';
+                return response()->json(['status' => true, 'data' => $data]);
             }
 
             $data['message'] = 'Invalid Code.';
@@ -298,25 +284,28 @@ class UsersController extends Controller
     public function ChangeUserPassword(Request $request)
     {
         try {
-            if (empty($request->email) || empty($request->password)) {
-                return response()->json(['status' => false, 'data' => ['message' => 'Email and new password are required.']]);
+            if (empty($request->email) || empty($request->password) || empty($request->verification_code)) {
+                return response()->json(['status' => false, 'data' => ['message' => 'Email, verification code and new password are required.']]);
+            }
+            if (strlen((string) $request->password) < 6) {
+                return response()->json(['status' => false, 'data' => ['message' => 'Password should be at least 6 characters']]);
             }
 
-            $user = User::where('email', $request->email)->first();
-            if (!$user) {
-                return response()->json(['status' => false, 'data' => ['message' => 'User not found.']]);
-            }
-
-            // Security check: if verification_code is provided, ensure it matches;
-            // otherwise require that a password reset was actually initiated on this user.
-            if (!empty($request->verification_code) && $user->verification_code != $request->verification_code) {
-                return response()->json(['status' => false, 'data' => ['message' => 'Invalid verification code.']]);
+            $user = User::where('email', strtolower(trim((string) $request->email)))->first();
+            if (!$this->checkPasswordResetCode($user, $request->verification_code)) {
+                return response()->json(['status' => false, 'data' => ['message' => 'Invalid or expired verification code.']]);
             }
 
             $user->password = app('hash')->make($request->password);
-            $user->verification_code = '';
+            $user->verification_code = null;
+            $user->verification_code_expires_at = null;
+            $user->verification_attempts = 0;
 
             if ($user->save()) {
+                try {
+                    $user->tokens()->update(['revoked' => true]);
+                } catch (\Throwable $e) {
+                }
                 $data['message'] = 'Successfully reset password';
                 return response()->json(['status' => true, 'data' => $data]);
             } else {
@@ -412,6 +401,34 @@ class UsersController extends Controller
         return $random_string;
     }
 
+    /**
+     * Returns the raster image extension for the given bytes, or null when the content is not
+     * an allowed image (SVG and anything else is rejected).
+     */
+    protected function detectRasterImageExtension(string $raw): ?string
+    {
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($raw);
+        $map = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'];
+        return $map[$mime] ?? null;
+    }
+
+    protected function assertPublicHost(string $host): void
+    {
+        $ips = filter_var($host, FILTER_VALIDATE_IP) ? [$host] : (gethostbynamel($host) ?: []);
+        if (empty($ips)) {
+            throw new \Exception('Could not resolve image host');
+        }
+        foreach ($ips as $ip) {
+            if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                throw new \Exception('Access to internal host is blocked');
+            }
+        }
+    }
+
+    /**
+     * Downloads (or decodes a data URI) into memory, checks it is a raster image no larger than
+     * MAX_IMAGE_BYTES and writes it to "$save_to_without_extension.<ext>". Returns the file name.
+     */
     public function save_image($img_url, $save_to)
     {
         $dir = dirname($save_to);
@@ -419,72 +436,73 @@ class UsersController extends Controller
             @mkdir($dir, 0755, true);
         }
 
-        // Support inline SVG / PNG / JPEG data URIs generated by the client-side Avatar Studio
-        if (str_starts_with($img_url, 'data:image/')) {
+        // Support PNG / JPEG / GIF / WEBP data URIs generated by the client-side Avatar Studio
+        if (str_starts_with($img_url, 'data:')) {
             $parts = explode(',', $img_url, 2);
             if (count($parts) !== 2) {
                 throw new \Exception('Malformed data URI');
             }
             $meta = $parts[0];
-            $raw = str_contains($meta, ';base64') ? base64_decode($parts[1]) : rawurldecode($parts[1]);
+            $raw = str_contains($meta, ';base64') ? base64_decode($parts[1], true) : rawurldecode($parts[1]);
             if (!$raw) {
                 throw new \Exception('Empty image payload');
             }
-            file_put_contents($save_to, $raw);
-            return;
+        } else {
+            $parsed = parse_url($img_url);
+            if (!$parsed || !isset($parsed['host']) || !in_array(strtolower($parsed['scheme'] ?? ''), ['http', 'https'])) {
+                throw new \Exception('Invalid image URL protocol');
+            }
+            $this->assertPublicHost(strtolower($parsed['host']));
+
+            $ch = curl_init($img_url);
+            curl_setopt($ch, CURLOPT_HEADER, 0);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+            curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+            curl_setopt($ch, CURLOPT_MAXFILESIZE, self::MAX_IMAGE_BYTES);
+            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function ($ch, $dlTotal, $dlNow) {
+                return $dlNow > self::MAX_IMAGE_BYTES ? 1 : 0;
+            });
+            $raw = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode >= 400 || !$raw) {
+                throw new \Exception('Failed to download image from remote URL');
+            }
         }
 
-        $parsed = parse_url($img_url);
-        if (!$parsed || !isset($parsed['host']) || !in_array(strtolower($parsed['scheme'] ?? ''), ['http', 'https'])) {
-            throw new \Exception('Invalid image URL protocol');
+        if (strlen($raw) > self::MAX_IMAGE_BYTES) {
+            throw new \Exception('Image is larger than 5 MB');
+        }
+        $extension = $this->detectRasterImageExtension($raw);
+        if ($extension === null) {
+            throw new \Exception('Unsupported image type (JPG, PNG, GIF or WEBP only)');
         }
 
-        $host = strtolower($parsed['host']);
-        if (
-            $host === 'localhost' ||
-            $host === '127.0.0.1' ||
-            str_starts_with($host, '169.254.') ||
-            str_starts_with($host, '10.') ||
-            str_starts_with($host, '192.168.')
-        ) {
-            throw new \Exception('Access to internal host is blocked');
+        $target = $save_to . '.' . $extension;
+        if (file_exists($target)) {
+            @unlink($target);
         }
-
-        $ch = curl_init($img_url);
-        curl_setopt($ch, CURLOPT_HEADER, 0);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-        $rawdata = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode >= 400 || !$rawdata) {
-            throw new \Exception('Failed to download image from remote URL');
-        }
-
-        if (file_exists($save_to)) {
-            @unlink($save_to);
-        }
-        file_put_contents($save_to, $rawdata);
+        file_put_contents($target, $raw);
+        return basename($target);
     }
 
     public function SaveImageFromUrl(Request $request)
     {
         try {
-            $user = User::where('id', $request->user_id)->firstOrFail();
-            $img_url = $request->image_url;
+            $user = User::where('id', $request->user()->id)->firstOrFail();
+            $img_url = (string) $request->image_url;
             $path = 'assets/uploads/users/';
-            $ext = str_starts_with($img_url, 'data:image/png') ? '.png' : '.svg';
-            $keyword = 'avatar_' . $user->id . '_' . date('dmyHis') . $ext;
-            $save_to = $path . $keyword;
-            $this->save_image($img_url, $save_to);
+            $keyword = $this->save_image($img_url, $path . 'avatar_' . $user->id . '_' . date('dmyHis'));
 
             $user->image = $keyword;
             $user->save();
 
             $data['message'] = 'Image Saved Successfully';
-            $data['image_url'] = $this->baseUrl() . $save_to;
+            $data['image_url'] = $this->baseUrl() . $path . $keyword;
 
             return response()->json(['status' => true, 'data' => $data]);
         } catch (\Exception $e) {

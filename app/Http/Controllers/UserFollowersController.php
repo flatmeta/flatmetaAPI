@@ -33,10 +33,10 @@ class UserFollowersController extends Controller
         $userdata = $request->user();
 
         try {
-            $myId = $userdata ? $userdata['id'] : $request->user_id;
+            $myId = $userdata['id'];
             $follower_user_id = $request->follower_user_id;
 
-            if (!$myId || !$follower_user_id) {
+            if (!$myId || !$follower_user_id || (int) $follower_user_id === (int) $myId) {
                 return response()->json(['status' => false, 'data' => ['message' => 'Invalid user IDs']]);
             }
 
@@ -79,7 +79,7 @@ class UserFollowersController extends Controller
         $userdata = $request->user();
 
         try {
-            $myId = $userdata ? $userdata['id'] : $request->query('user_id');
+            $myId = $userdata['id'];
             $friendrequests = UserFollowers::where('follower_user_id', $myId)->get();
             $data = ['requests' => []];
 
@@ -107,13 +107,46 @@ class UserFollowersController extends Controller
         }
     }
 
+    /** Accepted connections in either direction, with the chat room id for each. */
+    public function GetFriends(Request $request)
+    {
+        $myId = (int) $request->user()->id;
+        $rows = UserFollowers::where('status', '1')
+            ->where(function ($q) use ($myId) {
+                $q->where('user_id', $myId)->orWhere('follower_user_id', $myId);
+            })
+            ->get();
+
+        $friends = [];
+        foreach ($rows as $row) {
+            $otherId = (int) $row->user_id === $myId ? (int) $row->follower_user_id : (int) $row->user_id;
+            $other = User::where('id', $otherId)->where('status', '!=', '3')->first();
+            if ($other) {
+                $friends[] = [
+                    'user_id' => $other->id,
+                    'username' => $other->username,
+                    'fullname' => $other->fullname,
+                    'image' => $this->formatUserImage($other->image),
+                    'room_id' => $row->id,
+                ];
+            }
+        }
+        return response()->json(['status' => true, 'data' => ['friends' => $friends]]);
+    }
+
     public function UpdateFriendRequestStatus(Request $request)
     {
         try {
             $id = $request->request_id;
-            $friendrequests = UserFollowers::where('id', $id)->first();
+            // Only the user the request was sent to may accept ('1') or decline ('3') it.
+            $friendrequests = UserFollowers::where('id', $id)
+                ->where('follower_user_id', $request->user()->id)
+                ->first();
             if (!$friendrequests) {
                 return response()->json(['status' => false, 'data' => ['message' => 'Request not found']]);
+            }
+            if (!in_array((string) $request->status, ['1', '3'], true)) {
+                return response()->json(['status' => false, 'data' => ['message' => 'Invalid status']]);
             }
 
             $friendrequests->status = $request->status;
@@ -168,23 +201,11 @@ class UserFollowersController extends Controller
 
     public function GetRoomId(Request $request)
     {
-        $userdata = $request->user();
-        $myId = $userdata ? (int) $userdata['id'] : (int) $request->input('my_user_id', 0);
+        $myId = (int) $request->user()->id;
         $otherId = (int) $request->follower_user_id;
 
-        if (!$myId) {
-            return response()->json([
-                'status' => true,
-                'data' => [
-                    'room_id' => 'room_' . $otherId,
-                    'roomId' => 'room_' . $otherId,
-                    'messages' => [],
-                ],
-            ]);
-        }
-
         try {
-            if (!$otherId) {
+            if (!$otherId || $otherId === $myId || !User::where('id', $otherId)->exists()) {
                 return response()->json(['status' => false, 'message' => 'Invalid user ID']);
             }
 
@@ -194,15 +215,14 @@ class UserFollowersController extends Controller
                 $q->where('user_id', $otherId)->where('follower_user_id', $myId);
             })->first();
 
+            // Opening a chat creates a pending friend request at most; acceptance only happens
+            // through UpdateFriendRequestStatus by the recipient.
             if (!$conversation) {
                 $conversation = UserFollowers::create([
                     'user_id' => $myId,
                     'follower_user_id' => $otherId,
-                    'status' => '1',
+                    'status' => '2',
                 ]);
-            } elseif ($conversation->status != '1') {
-                $conversation->status = '1';
-                $conversation->save();
             }
 
             $roomId = $conversation->id;

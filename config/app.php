@@ -57,6 +57,11 @@ return [
     'asset_url' => env('ASSET_URL', null),
 
     /*
+    | Where the FlatMeta app is served (PayPal sends people back here).
+    */
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:4200'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use DateTime;
 use App\Models\Chat;
+use App\Models\User;
 use App\Models\UserFollowers;
 use Illuminate\Http\Request;
 
@@ -16,9 +17,10 @@ class ChatController extends Controller
         try{ 
 
             $room_id    = $request->roomId ?? $request->room_id;
-            $sender_id  = $request->senderId ?? $request->sender_id;
+            // The sender is always the authenticated user; senderId in the body is ignored.
+            $sender_id  = $request->user()->id;
             $message    = $request->message ?? $request->text;
-            $created_at = $request->createdAt ?? $request->created_at ?? now();
+            $created_at = now();
 
             // Validate Fields
             if(empty($room_id) || empty($sender_id) || empty($message)){
@@ -28,27 +30,28 @@ class ChatController extends Controller
             // Resolve conversation room if passed as string format "room_X"
             if (!is_numeric($room_id) && preg_match('/^room_(\d+)$/', $room_id, $m)) {
                 $otherUserId = (int) $m[1];
-                if (is_numeric($sender_id)) {
-                    $myId = (int) $sender_id;
-                    $conv = UserFollowers::where(function ($q) use ($myId, $otherUserId) {
-                        $q->where('user_id', $myId)->where('follower_user_id', $otherUserId);
-                    })->orWhere(function ($q) use ($myId, $otherUserId) {
-                        $q->where('user_id', $otherUserId)->where('follower_user_id', $myId);
-                    })->first();
+                $myId = (int) $sender_id;
+                $conv = UserFollowers::where(function ($q) use ($myId, $otherUserId) {
+                    $q->where('user_id', $myId)->where('follower_user_id', $otherUserId);
+                })->orWhere(function ($q) use ($myId, $otherUserId) {
+                    $q->where('user_id', $otherUserId)->where('follower_user_id', $myId);
+                })->first();
 
-                    if (!$conv) {
-                        try {
-                            $conv = UserFollowers::create([
-                                'user_id' => $myId,
-                                'follower_user_id' => $otherUserId,
-                                'status' => '1',
-                            ]);
-                        } catch (\Throwable $t) {}
-                    }
-                    if ($conv) {
-                        $room_id = $conv->id;
-                    }
+                // A first message opens a pending friend request (status '2'); it is never auto-accepted.
+                if (!$conv && $otherUserId !== $myId && User::where('id', $otherUserId)->exists()) {
+                    $conv = UserFollowers::create([
+                        'user_id' => $myId,
+                        'follower_user_id' => $otherUserId,
+                        'status' => '2',
+                    ]);
                 }
+                if ($conv) {
+                    $room_id = $conv->id;
+                }
+            }
+
+            if (!$this->userIsInRoom($room_id, $sender_id)) {
+                return response()->json(['status' => false, 'message' => 'You are not a member of this conversation']);
             }
             
             $Chat = new Chat();    
@@ -71,9 +74,24 @@ class ChatController extends Controller
         }
     }
 
+    /**
+     * A room is a user_followers row; only its two users may read or post in it.
+     */
+    protected function userIsInRoom($roomId, $userId): bool
+    {
+        if (!is_numeric($roomId)) {
+            return false;
+        }
+        $room = UserFollowers::find((int) $roomId);
+        return $room && ((int) $room->user_id === (int) $userId || (int) $room->follower_user_id === (int) $userId);
+    }
+
     public function GetAllMessagesByRoomId(Request $request,$id){
 
         try{ 
+            if (!$this->userIsInRoom($id, $request->user()->id)) {
+                return response()->json(['status' => false, 'message' => 'You are not a member of this conversation']);
+            }
 
             $messages = Chat::where('room_id',$id)->get();
             

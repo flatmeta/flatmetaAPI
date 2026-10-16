@@ -3,89 +3,55 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\Chat;
-use App\Models\UserFollowers;
-use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
+/**
+ * Real-time layer for the map: avatar positions, typing callouts, nearby chat
+ * and direct messages, plus "land changed" notices.
+ *
+ * Who a client is comes from the `hello` event. Signed-in users send their API
+ * token and are identified by their user id; guests get a `guest_…` id and can
+ * never claim a numeric (signed-in) id. Every relayed event is re-stamped with
+ * the sender's identity, so nobody can speak or move as someone else. Direct
+ * messages only go to the recipient's sockets. Messages are not stored here;
+ * the app saves direct messages through the authenticated REST API.
+ */
 class WebSocketServer extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'websocket:serve {--port=3500 : The port to listen on} {--host=0.0.0.0 : The host address to bind to}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Start the native PHP WebSocket server for FlatMeta real-time avatar movement, typing callouts, and live chat';
+    protected $description = 'Start the FlatMeta WebSocket server (avatars, typing, chat)';
+
+    const WS_MAGIC_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+
+    /** Largest single message we accept (bytes). */
+    const MAX_PAYLOAD = 65536;
+    /** Largest amount of unprocessed data we keep per client (bytes). */
+    const MAX_BUFFER = 262144;
+    /** Messages per client per second before we start dropping them. */
+    const RATE_LIMIT = 30;
 
     /**
-     * Array of client connections:
-     * resource_id => [
-     *   'socket' => resource,
-     *   'handshake' => bool,
-     *   'buffer' => string,
-     *   'ip' => string,
-     *   'userId' => string|null,
-     *   'username' => string|null,
-     *   'lastLocation' => array|null,
-     * ]
-     *
-     * @var array
+     * resource id => [socket, handshake, buffer, ip, userId, verified, username, fullname,
+     *                 avatar, image, lastLocation, rateWindow, rateCount, lastTilesNotice]
      */
     protected $clients = [];
 
-    /**
-     * Master server stream socket.
-     *
-     * @var resource
-     */
     protected $master;
 
-    /**
-     * Magic GUID for WebSocket RFC 6455 handshakes.
-     */
-    const WS_MAGIC_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-
-    /**
-     * Execute the console command.
-     *
-     * @return int
-     */
     public function handle()
     {
-        $host = $this->option('host');
-        $port = (int) $this->option('port');
-
-        $address = "tcp://{$host}:{$port}";
-        $context = stream_context_create([
-            'socket' => [
-                'so_reuseaddr' => 1,
-                'backlog' => 512
-            ]
-        ]);
-
-        $errno = 0;
-        $errstr = '';
+        $address = "tcp://{$this->option('host')}:" . (int) $this->option('port');
+        $context = stream_context_create(['socket' => ['so_reuseaddr' => 1, 'backlog' => 512]]);
         $this->master = @stream_socket_server($address, $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
-
         if (!$this->master) {
             $this->error("Failed to start WebSocket server on {$address}: [{$errno}] {$errstr}");
             return 1;
         }
-
         stream_set_blocking($this->master, false);
-
-        $this->info("=================================================");
-        $this->info("  FlatMeta Native PHP WebSocket Server Running  ");
-        $this->info("  Listening on: {$address}");
-        $this->info("  Port: {$port} | Protocol: RFC 6455");
-        $this->info("  Features: Presence, Disconnect Cleanup, Chat");
-        $this->info("=================================================");
+        $this->info("FlatMeta WebSocket server listening on {$address}");
 
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
@@ -95,61 +61,41 @@ class WebSocketServer extends Command
 
         while (true) {
             $read = [$this->master];
-            $write = null;
-            $except = null;
-
+            $write = $except = null;
             foreach ($this->clients as $id => $client) {
                 if (is_resource($client['socket'])) {
                     $read[] = $client['socket'];
                 } else {
-                    $this->disconnectClient($id, 'Stale socket resource');
+                    $this->disconnectClient($id, 'stale socket');
                 }
             }
 
-            $changed = @stream_select($read, $write, $except, 0, 200000);
-
-            if ($changed === false) {
+            if (@stream_select($read, $write, $except, 0, 200000) === false) {
                 break;
             }
 
-            if ($changed > 0) {
-                if (in_array($this->master, $read)) {
-                    $newSocket = @stream_socket_accept($this->master, 0);
-                    if ($newSocket) {
-                        stream_set_blocking($newSocket, false);
-                        $clientId = (int) $newSocket;
-                        $this->clients[$clientId] = [
-                            'socket' => $newSocket,
-                            'handshake' => false,
-                            'buffer' => '',
-                            'ip' => @stream_socket_get_name($newSocket, true),
-                            'userId' => null,
-                            'username' => null,
-                            'lastLocation' => null,
-                        ];
-                        $this->line("<fg=cyan>[+]</> Client #{$clientId} connected from {$this->clients[$clientId]['ip']} (Active: " . count($this->clients) . ")");
-                    }
-                    unset($read[array_search($this->master, $read)]);
+            foreach ($read as $socket) {
+                if ($socket === $this->master) {
+                    $this->acceptClient();
+                    continue;
                 }
-
-                foreach ($read as $clientSocket) {
-                    $clientId = (int) $clientSocket;
-                    if (!isset($this->clients[$clientId])) {
-                        continue;
-                    }
-
-                    $data = @fread($clientSocket, 65536);
-
-                    if ($data === false || $data === '') {
-                        $this->disconnectClient($clientId, 'Connection closed by client');
-                        continue;
-                    }
-
-                    if (!$this->clients[$clientId]['handshake']) {
-                        $this->performHandshake($clientId, $data);
-                    } else {
-                        $this->processClientFrames($clientId, $data);
-                    }
+                $clientId = (int) $socket;
+                if (!isset($this->clients[$clientId])) {
+                    continue;
+                }
+                $data = @fread($socket, 65536);
+                if ($data === false || $data === '') {
+                    $this->disconnectClient($clientId, 'closed by client');
+                    continue;
+                }
+                if (strlen($this->clients[$clientId]['buffer']) + strlen($data) > self::MAX_BUFFER) {
+                    $this->disconnectClient($clientId, 'buffer limit');
+                    continue;
+                }
+                if (!$this->clients[$clientId]['handshake']) {
+                    $this->performHandshake($clientId, $data);
+                } else {
+                    $this->processClientFrames($clientId, $data);
                 }
             }
         }
@@ -157,386 +103,418 @@ class WebSocketServer extends Command
         return 0;
     }
 
-    /**
-     * Perform RFC 6455 WebSocket Handshake and sync active online citizens.
-     */
+    protected function acceptClient(): void
+    {
+        $socket = @stream_socket_accept($this->master, 0);
+        if (!$socket) {
+            return;
+        }
+        stream_set_blocking($socket, false);
+        $id = (int) $socket;
+        $this->clients[$id] = [
+            'socket' => $socket,
+            'handshake' => false,
+            'buffer' => '',
+            'ip' => @stream_socket_get_name($socket, true),
+            'userId' => null,
+            'verified' => false,
+            'username' => null,
+            'fullname' => null,
+            'avatar' => null,
+            'image' => '',
+            'lastLocation' => null,
+            'rateWindow' => 0,
+            'rateCount' => 0,
+            'lastTilesNotice' => 0,
+        ];
+    }
+
+    // -------------------------------------------------------------------------
+    // RFC 6455 framing
+    // -------------------------------------------------------------------------
+
     protected function performHandshake(int $clientId, string $data): void
     {
         $client = &$this->clients[$clientId];
         $client['buffer'] .= $data;
-
-        $headerEndPos = strpos($client['buffer'], "\r\n\r\n");
-        if ($headerEndPos === false) {
-            return;
-        }
-
-        $headers = substr($client['buffer'], 0, $headerEndPos);
-        $client['buffer'] = substr($client['buffer'], $headerEndPos + 4);
-
-        if (!preg_match("/Sec-WebSocket-Key: *(.*?)\r\n/i", $headers, $match)) {
-            $this->disconnectClient($clientId, 'Handshake failed: Missing Sec-WebSocket-Key');
-            return;
-        }
-
-        $key = trim($match[1]);
-        $accept = base64_encode(sha1($key . self::WS_MAGIC_GUID, true));
-
-        $response = "HTTP/1.1 101 Switching Protocols\r\n";
-        $response .= "Upgrade: websocket\r\n";
-        $response .= "Connection: Upgrade\r\n";
-        $response .= "Sec-WebSocket-Accept: {$accept}\r\n";
-
-        if (preg_match("/Sec-WebSocket-Protocol: *(.*?)\r\n/i", $headers, $protoMatch)) {
-            $requestedProtocols = array_map('trim', explode(',', $protoMatch[1]));
-            if (!empty($requestedProtocols[0])) {
-                $response .= "Sec-WebSocket-Protocol: {$requestedProtocols[0]}\r\n";
+        $end = strpos($client['buffer'], "\r\n\r\n");
+        if ($end === false) {
+            if (strlen($client['buffer']) > 8192) {
+                $this->disconnectClient($clientId, 'oversized handshake');
             }
+            return;
+        }
+        $headers = substr($client['buffer'], 0, $end);
+        $client['buffer'] = substr($client['buffer'], $end + 4);
+
+        if (!preg_match('/^GET /', $headers)
+            || !preg_match('/^Upgrade:\s*websocket\s*$/mi', $headers)
+            || !preg_match("/Sec-WebSocket-Key: *(.*?)\r\n/i", $headers . "\r\n", $match)) {
+            @fwrite($client['socket'], "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+            $this->disconnectClient($clientId, 'bad handshake');
+            return;
         }
 
-        $response .= "\r\n";
-
-        @fwrite($client['socket'], $response);
+        $accept = base64_encode(sha1(trim($match[1]) . self::WS_MAGIC_GUID, true));
+        $this->writeRaw($clientId, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {$accept}\r\n\r\n");
         $client['handshake'] = true;
 
-        $this->line("<fg=green>[✓]</> Handshake completed for client #{$clientId}");
-
-        // Send welcome packet
-        $welcome = [
-            'event' => 'connected',
-            'data' => [
-                'clientId' => $clientId,
-                'server' => 'FlatMeta Laravel WebSocket Engine',
-                'timestamp' => now()->toISOString()
-            ]
-        ];
-        $this->sendToClient($clientId, json_encode($welcome));
-
-        // Immediately send all currently online avatars' locations to this newly joined client
-        foreach ($this->clients as $otherId => $otherClient) {
-            if ($otherId !== $clientId && !empty($otherClient['handshake']) && !empty($otherClient['lastLocation'])) {
-                $this->sendToClient($clientId, json_encode([
-                    'event' => 'location',
-                    'data' => $otherClient['lastLocation']
-                ]));
+        $this->send($clientId, 'connected', ['clientId' => $clientId, 'timestamp' => now()->toISOString()]);
+        // Show the newcomer everyone who is already on the map.
+        foreach ($this->clients as $otherId => $other) {
+            if ($otherId !== $clientId && $other['handshake'] && $other['lastLocation']) {
+                $this->send($clientId, 'location', $other['lastLocation']);
             }
         }
 
-        if (strlen($client['buffer']) > 0) {
+        if ($client['buffer'] !== '') {
             $this->processClientFrames($clientId, '');
         }
     }
 
-    /**
-     * Process incoming WebSocket frames from client according to RFC 6455.
-     */
     protected function processClientFrames(int $clientId, string $data): void
     {
         if (!isset($this->clients[$clientId])) {
             return;
         }
-
         $client = &$this->clients[$clientId];
         $client['buffer'] .= $data;
 
         while (strlen($client['buffer']) >= 2) {
-            $bytes = array_values(unpack('C*', substr($client['buffer'], 0, 2)));
-            $opcode = $bytes[0] & 0x0F;
-            $isMasked = ($bytes[1] & 0x80) === 0x80;
-            $payloadLength = $bytes[1] & 0x7F;
-
+            $b0 = ord($client['buffer'][0]);
+            $b1 = ord($client['buffer'][1]);
+            $opcode = $b0 & 0x0F;
+            $masked = ($b1 & 0x80) === 0x80;
+            $length = $b1 & 0x7F;
             $offset = 2;
 
-            if ($payloadLength === 126) {
-                if (strlen($client['buffer']) < $offset + 2) {
+            if ($length === 126) {
+                if (strlen($client['buffer']) < 4) {
                     return;
                 }
-                $lenData = unpack('nlen', substr($client['buffer'], $offset, 2));
-                $payloadLength = $lenData['len'];
-                $offset += 2;
-            } elseif ($payloadLength === 127) {
-                if (strlen($client['buffer']) < $offset + 8) {
+                $length = unpack('n', substr($client['buffer'], 2, 2))[1];
+                $offset = 4;
+            } elseif ($length === 127) {
+                if (strlen($client['buffer']) < 10) {
                     return;
                 }
-                $lenData = unpack('Jlen', substr($client['buffer'], $offset, 8));
-                $payloadLength = $lenData['len'];
-                $offset += 8;
+                $length = unpack('J', substr($client['buffer'], 2, 8))[1];
+                $offset = 10;
             }
 
-            $maskingKey = '';
-            if ($isMasked) {
-                if (strlen($client['buffer']) < $offset + 4) {
-                    return;
-                }
-                $maskingKey = substr($client['buffer'], $offset, 4);
-                $offset += 4;
+            // Browsers always mask client frames; anything else is not a real client.
+            if (!$masked || $length > self::MAX_PAYLOAD) {
+                $this->disconnectClient($clientId, $masked ? 'payload too large' : 'unmasked frame');
+                return;
             }
-
-            if (strlen($client['buffer']) < $offset + $payloadLength) {
+            if (strlen($client['buffer']) < $offset + 4 + $length) {
                 return;
             }
 
-            $rawPayload = substr($client['buffer'], $offset, $payloadLength);
-            $client['buffer'] = substr($client['buffer'], $offset + $payloadLength);
-
-            $payload = '';
-            if ($isMasked && strlen($maskingKey) === 4) {
-                for ($i = 0; $i < $payloadLength; $i++) {
-                    $payload .= $rawPayload[$i] ^ $maskingKey[$i % 4];
-                }
-            } else {
-                $payload = $rawPayload;
-            }
+            $mask = substr($client['buffer'], $offset, 4);
+            $raw = substr($client['buffer'], $offset + 4, $length);
+            $client['buffer'] = (string) substr($client['buffer'], $offset + 4 + $length);
+            $payload = $raw ^ str_repeat($mask, intdiv($length, 4) + 1);
+            $payload = substr($payload, 0, $length);
 
             switch ($opcode) {
-                case 0x1: // Text frame
+                case 0x1:
                     $this->handleTextMessage($clientId, $payload);
                     break;
-
-                case 0x8: // Close connection
+                case 0x8:
                     $this->sendFrame($clientId, '', 0x8);
-                    $this->disconnectClient($clientId, 'Client requested close');
+                    $this->disconnectClient($clientId, 'client closed');
                     return;
-
-                case 0x9: // Ping
+                case 0x9:
                     $this->sendFrame($clientId, $payload, 0xA);
                     break;
-
-                case 0xA: // Pong
-                    break;
-
                 default:
-                    break;
+                    break; // pong / continuation / binary: ignored
+            }
+            if (!isset($this->clients[$clientId])) {
+                return;
             }
         }
     }
 
-    /**
-     * Dispatch incoming message according to payload format.
-     */
+    // -------------------------------------------------------------------------
+    // Events
+    // -------------------------------------------------------------------------
+
     protected function handleTextMessage(int $clientId, string $message): void
     {
-        $decoded = json_decode($message, true);
-
-        if (!$decoded || !is_array($decoded)) {
+        if (!$this->withinRateLimit($clientId)) {
             return;
         }
-
-        $event = $decoded['event'] ?? $decoded['type'] ?? null;
-        $data = $decoded['data'] ?? $decoded['payload'] ?? $decoded;
-
-        if (!$event) {
-            if (isset($decoded['message']) || isset($decoded['roomId'])) {
-                $event = 'message';
-            } elseif (isset($decoded['location']) || isset($decoded['lat']) || isset($decoded['userId'])) {
-                $event = 'location';
-            } else {
-                $event = 'message';
-            }
+        $decoded = json_decode($message, true);
+        if (!is_array($decoded)) {
+            return;
+        }
+        $event = (string) ($decoded['event'] ?? $decoded['type'] ?? '');
+        $data = $decoded['data'] ?? [];
+        if (!is_array($data)) {
+            $data = [];
         }
 
         switch ($event) {
-            case 'message':
-            case 'chatMessage':
-                $this->handleChatMessage($clientId, is_array($data) ? $data : []);
+            case 'hello':
+                $this->handleHello($clientId, $data);
                 break;
-
             case 'location':
             case 'emitLocation':
-                $this->handleLocationUpdate($clientId, is_array($data) ? $data : []);
+                $this->ensureIdentity($clientId, $data);
+                $this->handleLocation($clientId, $data);
                 break;
-
             case 'typing':
-                $this->handleTypingUpdate($clientId, is_array($data) ? $data : []);
+                $this->ensureIdentity($clientId, $data);
+                $this->handleTyping($clientId, $data);
                 break;
-
-            case 'user_disconnect':
-                $uid = is_array($data) ? ($data['userId'] ?? null) : $data;
-                if ($uid) {
-                    $this->broadcast(json_encode([
-                        'event' => 'user_disconnect',
-                        'data' => ['userId' => (string) $uid]
-                    ]), $clientId);
-                }
+            case 'message':
+            case 'chatMessage':
+                $this->ensureIdentity($clientId, $data);
+                $this->handleChat($clientId, $data);
                 break;
-
+            case 'tiles_updated':
+                $this->handleTilesUpdated($clientId);
+                break;
             case 'ping':
-                $this->sendToClient($clientId, json_encode(['event' => 'pong', 'timestamp' => now()->toISOString()]));
+                $this->send($clientId, 'pong', ['timestamp' => now()->toISOString()]);
                 break;
-
             default:
-                $broadcastPayload = json_encode([
-                    'event' => $event,
-                    'data' => $data
-                ]);
-                $this->broadcast($broadcastPayload, $clientId);
+                // Unknown events are dropped instead of relayed to everyone.
                 break;
         }
     }
 
     /**
-     * Process chat messages, preserve rich sender/expression metadata, and persist to DB.
+     * Identifies the client. A valid API token makes it the signed-in user;
+     * otherwise it is a guest whose id must look like guest_xxxx.
      */
-    protected function handleChatMessage(int $clientId, array $data): void
+    protected function handleHello(int $clientId, array $data): void
     {
-        $roomId = $data['roomId'] ?? $data['room_id'] ?? 'global_nearby';
-        $senderId = $data['senderId'] ?? $data['sender_id'] ?? ($this->clients[$clientId]['userId'] ?? null);
-        $msgText = trim($data['message'] ?? $data['text'] ?? '');
-        $createdAt = $data['created_at'] ?? $data['createdAt'] ?? now()->toISOString();
+        $client = &$this->clients[$clientId];
+        $previousId = $client['userId'];
 
-        if ($msgText === '') {
+        $user = !empty($data['token']) && is_string($data['token']) ? $this->userFromToken($data['token']) : null;
+        if ($user) {
+            $client['userId'] = (string) $user->id;
+            $client['verified'] = true;
+            $client['username'] = $user->username;
+            $client['fullname'] = $user->fullname;
+        } else {
+            $client['userId'] = $this->guestId($data['userId'] ?? null, $clientId);
+            $client['verified'] = false;
+            $client['username'] = $this->cleanText($data['username'] ?? '', 40) ?: $client['userId'];
+            $client['fullname'] = $this->cleanText($data['fullname'] ?? '', 60) ?: 'Guest';
+        }
+        $client['avatar'] = $this->cleanAvatar($data['avatar'] ?? null);
+        $client['image'] = $this->cleanImage($data['image'] ?? '');
+
+        if ($previousId && $previousId !== $client['userId'] && !$this->userOnline($previousId, $clientId)) {
+            $this->broadcast('user_disconnect', ['userId' => $previousId], $clientId);
+        }
+        $this->send($clientId, 'welcome', ['userId' => $client['userId'], 'verified' => $client['verified']]);
+    }
+
+    /** Older clients send identity inside location/message payloads instead of a hello. */
+    protected function ensureIdentity(int $clientId, array $data): void
+    {
+        if ($this->clients[$clientId]['userId'] === null) {
+            $this->handleHello($clientId, array_diff_key($data, ['token' => true]));
+        }
+    }
+
+    protected function handleLocation(int $clientId, array $data): void
+    {
+        $loc = $data['location'] ?? $data;
+        $lat = isset($loc['lat']) ? (float) $loc['lat'] : (isset($loc[0]) ? (float) $loc[0] : null);
+        $lng = isset($loc['lng']) ? (float) $loc['lng'] : (isset($loc[1]) ? (float) $loc[1] : null);
+        if ($lat === null || $lng === null || abs($lat) > 90 || abs($lng) > 180) {
+            return;
+        }
+        $client = &$this->clients[$clientId];
+        $payload = $this->identity($clientId) + [
+            'expression' => $this->cleanText($data['expression'] ?? '', 20) ?: null,
+            'location' => ['lat' => round($lat, 6), 'lng' => round($lng, 6)],
+        ];
+        $client['lastLocation'] = $payload;
+        $this->broadcast('location', $payload, $clientId);
+    }
+
+    protected function handleTyping(int $clientId, array $data): void
+    {
+        $this->broadcast('typing', [
+            'userId' => $this->clients[$clientId]['userId'],
+            'username' => $this->clients[$clientId]['username'],
+            'text' => $this->cleanText($data['text'] ?? '', 140),
+        ], $clientId);
+    }
+
+    protected function handleChat(int $clientId, array $data): void
+    {
+        $text = $this->cleanText($data['message'] ?? $data['text'] ?? '', 1000);
+        if ($text === '') {
+            return;
+        }
+        $client = $this->clients[$clientId];
+        $direct = ($data['scope'] ?? '') === 'direct' || !empty($data['recipientId']);
+        $recipient = $direct ? $this->cleanText((string) ($data['recipientId'] ?? ''), 40) : null;
+        if ($direct && $recipient === '') {
             return;
         }
 
-        // Resolve numeric room ID if string like "room_X"
-        $numericRoomId = null;
-        if (is_numeric($roomId)) {
-            $numericRoomId = (int) $roomId;
-        } elseif (is_string($roomId) && preg_match('/^room_(\d+)$/', $roomId, $m)) {
-            $otherUserId = (int) $m[1];
-            if (is_numeric($senderId)) {
-                $myId = (int) $senderId;
-                $conv = UserFollowers::where(function ($q) use ($myId, $otherUserId) {
-                    $q->where('user_id', $myId)->where('follower_user_id', $otherUserId);
-                })->orWhere(function ($q) use ($myId, $otherUserId) {
-                    $q->where('user_id', $otherUserId)->where('follower_user_id', $myId);
-                })->first();
+        $payload = [
+            'id' => $this->cleanText($data['id'] ?? '', 80) ?: ('msg_' . $client['userId'] . '_' . microtime(true)),
+            'scope' => $direct ? 'direct' : 'nearby',
+            'roomId' => $direct ? 'direct' : 'global_nearby',
+            'senderId' => $client['userId'],
+            'senderName' => $client['fullname'],
+            'senderUsername' => $client['username'],
+            'recipientId' => $recipient,
+            'message' => $text,
+            'lat' => isset($data['lat']) && is_numeric($data['lat']) ? (float) $data['lat'] : null,
+            'lng' => isset($data['lng']) && is_numeric($data['lng']) ? (float) $data['lng'] : null,
+            'created_at' => now()->toISOString(),
+        ];
 
-                if (!$conv && User::where('id', $otherUserId)->exists() && User::where('id', $myId)->exists()) {
-                    try {
-                        $conv = UserFollowers::create([
-                            'user_id' => $myId,
-                            'follower_user_id' => $otherUserId,
-                            'status' => '1',
-                        ]);
-                    } catch (\Throwable $t) {}
-                }
-
-                if ($conv) {
-                    $numericRoomId = $conv->id;
-                    $roomId = $conv->id;
+        if ($direct) {
+            // Only the recipient (all their tabs) and the sender's other tabs get a private message.
+            foreach ($this->clients as $id => $other) {
+                if ($id !== $clientId && $other['handshake'] && in_array($other['userId'], [$recipient, $client['userId']], true)) {
+                    $this->send($id, 'message', $payload);
                 }
             }
+            return;
         }
+        $this->broadcast('message', $payload, $clientId);
+    }
 
-        if ($numericRoomId && is_numeric($senderId)) {
+    protected function handleTilesUpdated(int $clientId): void
+    {
+        $now = microtime(true);
+        if ($now - $this->clients[$clientId]['lastTilesNotice'] < 1.0) {
+            return;
+        }
+        $this->clients[$clientId]['lastTilesNotice'] = $now;
+        $this->broadcast('tiles_updated', ['by' => $this->clients[$clientId]['userId']], $clientId);
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    protected function identity(int $clientId): array
+    {
+        $c = $this->clients[$clientId];
+        return [
+            'userId' => $c['userId'],
+            'username' => $c['username'],
+            'fullname' => $c['fullname'],
+            'avatar' => $c['avatar'],
+            'image' => $c['image'],
+            'verified' => $c['verified'],
+        ];
+    }
+
+    protected function userFromToken(string $token)
+    {
+        try {
+            Auth::forgetGuards();
+            $request = Request::create('/', 'GET');
+            $request->headers->set('Authorization', 'Bearer ' . $token);
+            $request->headers->set('Accept', 'application/json');
+            return Auth::guard('api')->setRequest($request)->user();
+        } catch (\Throwable $e) {
+            // The DB connection may have dropped in this long-running process; retry once.
             try {
-                Chat::create([
-                    'room_id' => $numericRoomId,
-                    'sender_id' => (int) $senderId,
-                    'message' => $msgText,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            } catch (\Throwable $e) {
-                $this->warn('Chat DB insert notice: ' . $e->getMessage());
+                DB::reconnect();
+                Auth::forgetGuards();
+                return Auth::guard('api')->setRequest($request)->user();
+            } catch (\Throwable $e2) {
+                $this->warn('Token check failed: ' . $e2->getMessage());
+                return null;
             }
         }
-
-        $payload = [
-            'id' => $data['id'] ?? ('msg_' . time() . '_' . mt_rand(100, 999)),
-            'roomId' => $roomId,
-            'room_id' => $roomId,
-            'scope' => $data['scope'] ?? 'nearby',
-            'senderId' => $senderId,
-            'sender_id' => $senderId,
-            'senderName' => $data['senderName'] ?? $data['fullname'] ?? ($this->clients[$clientId]['username'] ?? 'Citizen'),
-            'senderUsername' => $data['senderUsername'] ?? $data['username'] ?? ($this->clients[$clientId]['username'] ?? 'citizen'),
-            'senderAvatar' => $data['senderAvatar'] ?? $data['image'] ?? '',
-            'recipientId' => $data['recipientId'] ?? null,
-            'message' => $msgText,
-            'expression' => $data['expression'] ?? null,
-            'lat' => $data['lat'] ?? null,
-            'lng' => $data['lng'] ?? null,
-            'created_at' => $createdAt,
-            'createdAt' => $createdAt
-        ];
-
-        $json = json_encode([
-            'event' => 'message',
-            'data' => $payload
-        ]);
-
-        $this->line("<fg=yellow>[CHAT]</> Client #{$clientId} (Room: {$roomId}): " . substr($msgText, 0, 40));
-
-        $this->broadcast($json);
     }
 
-    /**
-     * Process live typing callouts and broadcast to nearby citizens.
-     */
-    protected function handleTypingUpdate(int $clientId, array $data): void
+    protected function guestId($claimed, int $clientId): string
     {
-        $payload = [
-            'userId' => $data['userId'] ?? ($this->clients[$clientId]['userId'] ?? null),
-            'username' => $data['username'] ?? ($this->clients[$clientId]['username'] ?? 'Citizen'),
-            'text' => $data['text'] ?? '',
-        ];
-
-        $this->broadcast(json_encode([
-            'event' => 'typing',
-            'data' => $payload
-        ]), $clientId);
-    }
-
-    /**
-     * Process avatar location updates, store last known state for new joiners, and broadcast.
-     */
-    protected function handleLocationUpdate(int $clientId, array $data): void
-    {
-        $locData = $data['data'] ?? $data;
-        if (isset($this->clients[$clientId]) && is_array($locData)) {
-            if (!empty($locData['userId'])) {
-                $this->clients[$clientId]['userId'] = (string) $locData['userId'];
-            }
-            if (!empty($locData['username'])) {
-                $this->clients[$clientId]['username'] = (string) $locData['username'];
-            }
-            $this->clients[$clientId]['lastLocation'] = $locData;
+        if (is_string($claimed) && preg_match('/^guest_[a-z0-9]{3,24}$/', $claimed)) {
+            return $claimed;
         }
-
-        $json = json_encode([
-            'event' => 'location',
-            'data' => $locData
-        ]);
-
-        $this->broadcast($json, $clientId);
+        return 'guest_c' . $clientId;
     }
 
-    /**
-     * Broadcast WebSocket frame to connected clients.
-     */
-    protected function broadcast(string $message, ?int $excludeClientId = null): void
+    protected function cleanText($value, int $max): string
     {
-        foreach ($this->clients as $id => $client) {
-            if ($excludeClientId !== null && $id === $excludeClientId) {
+        $text = is_scalar($value) ? trim((string) $value) : '';
+        // Strip control characters; the app escapes HTML when rendering.
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? '';
+        return mb_substr($text, 0, $max);
+    }
+
+    protected function cleanAvatar($avatar): ?array
+    {
+        if (!is_array($avatar)) {
+            return null;
+        }
+        $clean = [];
+        foreach ($avatar as $key => $value) {
+            if (count($clean) >= 12 || !is_string($key) || !preg_match('/^[a-zA-Z]{1,20}$/', $key) || !is_string($value)) {
                 continue;
             }
-            if ($client['handshake']) {
-                $this->sendToClient($id, $message);
+            if (preg_match('/^(#[0-9a-fA-F]{3,8}|[A-Za-z0-9]{1,40})$/', $value)) {
+                $clean[$key] = $value;
+            }
+        }
+        return $clean ?: null;
+    }
+
+    protected function cleanImage($image): string
+    {
+        return is_string($image) && strlen($image) <= 500 && preg_match('#^https?://[^\s"\'<>]+$#i', $image) ? $image : '';
+    }
+
+    protected function withinRateLimit(int $clientId): bool
+    {
+        $c = &$this->clients[$clientId];
+        $second = time();
+        if ($c['rateWindow'] !== $second) {
+            $c['rateWindow'] = $second;
+            $c['rateCount'] = 0;
+        }
+        return ++$c['rateCount'] <= self::RATE_LIMIT;
+    }
+
+    protected function userOnline(string $userId, int $exceptClientId): bool
+    {
+        foreach ($this->clients as $id => $c) {
+            if ($id !== $exceptClientId && $c['userId'] === $userId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected function send(int $clientId, string $event, $data): void
+    {
+        $this->sendFrame($clientId, json_encode(['event' => $event, 'data' => $data]), 0x1);
+    }
+
+    protected function broadcast(string $event, $data, ?int $exceptClientId = null): void
+    {
+        $json = json_encode(['event' => $event, 'data' => $data]);
+        foreach ($this->clients as $id => $client) {
+            if ($id !== $exceptClientId && $client['handshake']) {
+                $this->sendFrame($id, $json, 0x1);
             }
         }
     }
 
-    /**
-     * Send text frame to specific client.
-     */
-    protected function sendToClient(int $clientId, string $message): void
-    {
-        $this->sendFrame($clientId, $message, 0x1);
-    }
-
-    /**
-     * Encode and send RFC 6455 frame to client.
-     */
     protected function sendFrame(int $clientId, string $payload, int $opcode = 0x1): void
     {
-        if (!isset($this->clients[$clientId])) {
-            return;
-        }
-
         $length = strlen($payload);
         $header = chr(0x80 | $opcode);
-
         if ($length <= 125) {
             $header .= chr($length);
         } elseif ($length <= 65535) {
@@ -544,53 +522,55 @@ class WebSocketServer extends Command
         } else {
             $header .= chr(127) . pack('J', $length);
         }
-
-        $frame = $header . $payload;
-        @fwrite($this->clients[$clientId]['socket'], $frame);
+        $this->writeRaw($clientId, $header . $payload);
     }
 
-    /**
-     * Cleanly disconnect a client and broadcast `user_disconnect` so zombie avatars are removed.
-     */
-    protected function disconnectClient(int $clientId, string $reason = ''): void
+    /** Non-blocking sockets can accept only part of a write; keep writing for a moment. */
+    protected function writeRaw(int $clientId, string $bytes): void
     {
-        if (isset($this->clients[$clientId])) {
-            $disconnectedUserId = $this->clients[$clientId]['userId'] ?? null;
-
-            if (is_resource($this->clients[$clientId]['socket'])) {
-                @fclose($this->clients[$clientId]['socket']);
+        if (!isset($this->clients[$clientId])) {
+            return;
+        }
+        $socket = $this->clients[$clientId]['socket'];
+        $deadline = microtime(true) + 0.5;
+        while ($bytes !== '') {
+            $written = @fwrite($socket, $bytes);
+            if ($written === false) {
+                $this->disconnectClient($clientId, 'write failed');
+                return;
             }
-            unset($this->clients[$clientId]);
-
-            $this->line("<fg=red>[-]</> Client #{$clientId} disconnected ({$reason}). Active: " . count($this->clients));
-
-            if ($disconnectedUserId) {
-                // Only broadcast disconnect if this userId has no other open socket
-                $stillConnected = false;
-                foreach ($this->clients as $c) {
-                    if (($c['userId'] ?? null) === $disconnectedUserId) {
-                        $stillConnected = true;
-                        break;
-                    }
+            $bytes = (string) substr($bytes, $written);
+            if ($bytes !== '') {
+                if (microtime(true) > $deadline) {
+                    $this->disconnectClient($clientId, 'slow client');
+                    return;
                 }
-                if (!$stillConnected) {
-                    $this->broadcast(json_encode([
-                        'event' => 'user_disconnect',
-                        'data' => ['userId' => (string) $disconnectedUserId]
-                    ]));
-                }
+                usleep(1000);
             }
         }
     }
 
-    /**
-     * Graceful server shutdown.
-     */
+    protected function disconnectClient(int $clientId, string $reason = ''): void
+    {
+        if (!isset($this->clients[$clientId])) {
+            return;
+        }
+        $userId = $this->clients[$clientId]['userId'];
+        if (is_resource($this->clients[$clientId]['socket'])) {
+            @fclose($this->clients[$clientId]['socket']);
+        }
+        unset($this->clients[$clientId]);
+
+        // Only remove the avatar once the user has no other open tab.
+        if ($userId && !$this->userOnline($userId, -1)) {
+            $this->broadcast('user_disconnect', ['userId' => $userId]);
+        }
+    }
+
     public function shutdown(): void
     {
-        $this->info("\nShutting down FlatMeta WebSocket server...");
         foreach (array_keys($this->clients) as $clientId) {
-            $this->disconnectClient($clientId, 'Server shutting down');
+            $this->disconnectClient($clientId, 'server shutting down');
         }
         if (is_resource($this->master)) {
             @fclose($this->master);

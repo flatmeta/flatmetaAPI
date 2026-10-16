@@ -17,3 +17,14 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('flatmeta:make-admin {email} {--revoke}', function ($email) {
+    $user = \App\Models\User::where('email', strtolower(trim($email)))->first();
+    if (!$user) {
+        $this->error("No user with email {$email}");
+        return 1;
+    }
+    $user->is_admin = !$this->option('revoke');
+    $user->save();
+    $this->info(($user->is_admin ? 'Granted' : 'Revoked') . " CMS access for {$user->email}");
+})->purpose('Grant (or --revoke) CMS admin access for a user');

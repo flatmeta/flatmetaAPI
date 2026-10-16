@@ -46,10 +46,11 @@ class UserBoxesController extends Controller
                         'area_title' => $meta['area_title'] ?? ($tiles->area_name ?: ''),
                         'slug' => $meta['slug'] ?? '',
                         'three_words' => $meta['three_words'] ?? '',
-                        'span_bounds' => $meta['span_bounds'] ?? null,
+                        // A square's own span (set when an image is stretched over a selection) wins over the area's.
+                        'span_bounds' => !empty($tiles->span_bounds) ? json_decode($tiles->span_bounds, true) : ($meta['span_bounds'] ?? null),
                         'embed_url' => $meta['embed_url'] ?? '',
                         'custom_code' => $meta['custom_code'] ?? '',
-                        'previous_image' => $meta['previous_image'] ?? '',
+                        'previous_image' => $this->formatTileImage($tiles->previous_image ?? null, $baseUrl),
                         'promoted' => (bool) ($meta['promoted'] ?? false),
                         'views' => (int) ($meta['views'] ?? 0),
                         'lat' => (float) $tiles->lat,
