@@ -34,6 +34,7 @@ $router->get('/GetUserTilesByOrderId/{id}', 'App\Http\Controllers\UsersControlle
 $router->get('/BoxImages', 'App\Http\Controllers\ImageController@BoxImages');
 $router->get('/SaleList', 'App\Http\Controllers\OrdersController@SaleList');
 $router->get('/LatestPurchasedTiles', 'App\Http\Controllers\OrdersController@LatestPurchasedTiles');
+$router->get('/FindArea', 'App\Http\Controllers\OrdersController@FindArea');
 
 ## Leaderboard, Clans & Community Mini-Git-Lab (read only) ##
 $router->get('/Leaderboard', 'App\Http\Controllers\OrdersController@Leaderboard');

@@ -35,7 +35,7 @@ class WebSocketServer extends Command
 
     /**
      * resource id => [socket, handshake, buffer, ip, userId, verified, username, fullname,
-     *                 avatar, image, lastLocation, rateWindow, rateCount, lastTilesNotice]
+     *                 avatar, image, lastLocation, rateWindow, rateCount, tilesNotices]
      */
     protected $clients = [];
 
@@ -125,7 +125,7 @@ class WebSocketServer extends Command
             'lastLocation' => null,
             'rateWindow' => 0,
             'rateCount' => 0,
-            'lastTilesNotice' => 0,
+            'tilesNotices' => [],
         ];
     }
 
@@ -275,7 +275,7 @@ class WebSocketServer extends Command
                 $this->handleChat($clientId, $data);
                 break;
             case 'tiles_updated':
-                $this->handleTilesUpdated($clientId);
+                $this->handleTilesUpdated($clientId, $data);
                 break;
             case 'ping':
                 $this->send($clientId, 'pong', ['timestamp' => now()->toISOString()]);
@@ -389,14 +389,50 @@ class WebSocketServer extends Command
         $this->broadcast('message', $payload, $clientId);
     }
 
-    protected function handleTilesUpdated(int $clientId): void
+    /**
+     * "My land changed": tells everyone else to reload it. `bounds`
+     * {minLat, minLng, maxLat, maxLng} is the changed area, so clients only
+     * refetch when it overlaps what they are showing; without it (or when it is
+     * malformed or huge) clients reload their current view.
+     */
+    protected function handleTilesUpdated(int $clientId, array $data): void
     {
         $now = microtime(true);
-        if ($now - $this->clients[$clientId]['lastTilesNotice'] < 1.0) {
+        // Up to 5 notices per 2 seconds per connection (claim + image + details can follow each other).
+        $recent = array_values(array_filter($this->clients[$clientId]['tilesNotices'], fn ($t) => $now - $t < 2.0));
+        if (count($recent) >= 5) {
             return;
         }
-        $this->clients[$clientId]['lastTilesNotice'] = $now;
-        $this->broadcast('tiles_updated', ['by' => $this->clients[$clientId]['userId']], $clientId);
+        $recent[] = $now;
+        $this->clients[$clientId]['tilesNotices'] = $recent;
+
+        $payload = ['by' => $this->clients[$clientId]['userId']];
+        $bounds = $this->cleanBounds($data['bounds'] ?? null);
+        if ($bounds) {
+            $payload['bounds'] = $bounds;
+        }
+        $this->broadcast('tiles_updated', $payload, $clientId);
+    }
+
+    /** {minLat, minLng, maxLat, maxLng} as floats, or null when malformed or wider than 10 degrees. */
+    protected function cleanBounds($b): ?array
+    {
+        if (!is_array($b)) {
+            return null;
+        }
+        $out = [];
+        foreach (['minLat', 'minLng', 'maxLat', 'maxLng'] as $k) {
+            if (!isset($b[$k]) || !is_numeric($b[$k])) {
+                return null;
+            }
+            $out[$k] = round((float) $b[$k], 7);
+        }
+        if ($out['minLat'] < -90 || $out['maxLat'] > 90 || $out['minLat'] > $out['maxLat']
+            || $out['minLng'] < -180 || $out['maxLng'] > 180 || $out['minLng'] > $out['maxLng']
+            || $out['maxLat'] - $out['minLat'] > 10 || $out['maxLng'] - $out['minLng'] > 10) {
+            return null;
+        }
+        return $out;
     }
 
     // -------------------------------------------------------------------------

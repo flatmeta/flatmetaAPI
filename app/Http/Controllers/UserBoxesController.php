@@ -18,13 +18,39 @@ class UserBoxesController extends Controller
         return $baseUrl . 'assets/uploads/defaultimages/' . ltrim($image, '/');
     }
 
+    /**
+     * Owned squares for the map.
+     * - `bbox=minLat,minLng,maxLat,maxLng`: only squares whose north-west corner is inside it
+     *   (nearest the centre first). Without it, the newest squares.
+     * - `limit`: at most UserBoxes::MAX_TILES (the default). `data.truncated` says when more matched.
+     * - `summary=1`: one row per area (centre, tile count, image, title, on_sale) for the
+     *   zoomed-out levels, filtered on the area centre and capped at UserBoxes::MAX_AREAS.
+     */
     public function PurchasedTiles(Request $request)
     {
         try {
-            $tilesData = UserBoxes::GetUserTiles();
-
-            $data = ['tiles' => []];
+            $bbox = null;
+            if ($request->filled('bbox')) {
+                $bbox = UserBoxes::parseBbox((string) $request->query('bbox'));
+                if (!$bbox) {
+                    return response()->json(['status' => false, 'message' => 'bbox must be minLat,minLng,maxLat,maxLng']);
+                }
+            }
             $baseUrl = rtrim(config('app.url', url('/')), '/') . '/';
+
+            if ($request->boolean('summary')) {
+                return $this->AreaSummaries($bbox, $baseUrl, (int) $request->query('limit', UserBoxes::MAX_AREAS));
+            }
+
+            $limit = max(1, min(UserBoxes::MAX_TILES, (int) $request->query('limit', UserBoxes::MAX_TILES)));
+            // One extra row tells us whether the cap cut the answer short.
+            $tilesData = UserBoxes::GetUserTiles($bbox, $limit + 1);
+            $truncated = $tilesData->count() > $limit;
+            if ($truncated) {
+                $tilesData = $tilesData->take($limit);
+            }
+
+            $data = ['tiles' => [], 'bbox' => $bbox, 'limit' => $limit, 'truncated' => $truncated];
 
             if (!empty($tilesData) && $tilesData->isNotEmpty()) {
                 foreach ($tilesData as $tiles) {
@@ -70,5 +96,41 @@ class UserBoxesController extends Controller
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
         }
+    }
+
+    /** `PurchasedTiles?summary=1`: one row per area, for the City and World zoom levels. */
+    protected function AreaSummaries(?array $bbox, string $baseUrl, int $limit)
+    {
+        $limit = max(1, min(UserBoxes::MAX_AREAS, $limit));
+        $rows = UserBoxes::GetAreaSummaries($bbox, $limit + 1);
+        $truncated = $rows->count() > $limit;
+
+        $areas = [];
+        foreach ($rows->take($limit) as $row) {
+            $meta = json_decode((string) $row->log, true);
+            $meta = is_array($meta) ? $meta : [];
+            $areas[] = [
+                'order_id' => $row->id,
+                'user_id' => $row->user_id,
+                'username' => $row->username ?? 'citizen',
+                'fullname' => $row->fullname ?? 'Metaverse Citizen',
+                'area_title' => $meta['area_title'] ?? ($row->name ?: ''),
+                'slug' => $meta['slug'] ?? '',
+                'lat' => (float) $row->center_lat,
+                'lng' => (float) $row->center_lng,
+                'no_of_tiles' => (int) ($row->no_of_tiles ?: 1),
+                'image' => $this->formatTileImage($row->image ?? null, $baseUrl),
+                'on_sale' => ($row->on_sale ?? '0') == '1' && (float) $row->sale_price > 0,
+                'sale_price' => (float) ($row->sale_price ?? 0),
+                'promoted' => (bool) ($meta['promoted'] ?? false),
+            ];
+        }
+
+        return response()->json(['status' => true, 'data' => [
+            'areas' => $areas,
+            'bbox' => $bbox,
+            'limit' => $limit,
+            'truncated' => $truncated,
+        ]]);
     }
 }
