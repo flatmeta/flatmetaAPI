@@ -125,9 +125,16 @@ class OrdersController extends Controller
         }
     }
 
-    protected function formatOrderRecord($order): array
+    /** Squares of many orders in one query, keyed by order id (avoids one query per order). */
+    protected function boxesByOrder($orders)
     {
-        $boxes = UserBoxes::where('order_id', $order->id)->get();
+        $ids = collect($orders)->pluck('id')->all();
+        return empty($ids) ? collect() : UserBoxes::whereIn('order_id', $ids)->get()->groupBy('order_id');
+    }
+
+    protected function formatOrderRecord($order, $boxes = null): array
+    {
+        $boxes = $boxes ?? UserBoxes::where('order_id', $order->id)->get();
         $firstBox = $boxes->first();
         $lat = $firstBox ? (float) $firstBox->lat : 51.50972;
         $lng = $firstBox ? (float) $firstBox->lng : -0.104317;
@@ -142,6 +149,8 @@ class OrdersController extends Controller
                 'lat' => (float) $b->lat,
                 'lng' => (float) $b->lng,
                 'image' => $this->formatTileImage($b->image ?? null),
+                'previous_image' => !empty($b->previous_image) ? $this->formatTileImage($b->previous_image) : '',
+                'span_bounds' => !empty($b->span_bounds) ? json_decode($b->span_bounds, true) : null,
             ];
         }
 
@@ -167,6 +176,8 @@ class OrdersController extends Controller
             'lng' => $lng,
             'tile_lat' => $lat,
             'tile_lng' => $lng,
+            'center_lat' => $order->center_lat !== null ? (float) $order->center_lat : $lat,
+            'center_lng' => $order->center_lng !== null ? (float) $order->center_lng : $lng,
             'custom_details' => $order->custom_details ?? '',
             'amount' => (float) ($order->amount ?? self::PRICE_PER_TILE_MONTH),
             'sale_price' => (float) ($order->sale_price ?? 0),
@@ -318,6 +329,9 @@ class OrdersController extends Controller
                     }
                     $userBox->save();
                 }
+                $order->center_lat = round(array_sum(array_map(fn ($t) => (float) $t['lat'], $tilesToClaim)) / $count, 7);
+                $order->center_lng = round(array_sum(array_map(fn ($t) => (float) $t['lng'], $tilesToClaim)) / $count, 7);
+                $order->save();
 
                 DB::commit();
 
@@ -509,13 +523,13 @@ class OrdersController extends Controller
     {
         try {
             $filter = $request->query('filter', 'all');
-            $Orders = Orders::GetUserTiles($filter);
+            $limit = max(1, min(200, (int) $request->query('limit', 100)));
+            $Orders = Orders::GetUserTiles($filter, $limit);
             $data = ['tiles' => []];
 
-            if (!empty($Orders)) {
-                foreach ($Orders as $order) {
-                    $data['tiles'][] = $this->formatOrderRecord($order);
-                }
+            $boxes = $this->boxesByOrder($Orders);
+            foreach ($Orders as $order) {
+                $data['tiles'][] = $this->formatOrderRecord($order, $boxes->get($order->id, collect()));
             }
 
             return response()->json(['status' => true, 'data' => $data]);
@@ -532,10 +546,9 @@ class OrdersController extends Controller
             $Orders = Orders::GetUserTilesByID($userId);
             $data = ['tiles' => []];
 
-            if (!empty($Orders)) {
-                foreach ($Orders as $order) {
-                    $data['tiles'][] = $this->formatOrderRecord($order);
-                }
+            $boxes = $this->boxesByOrder($Orders);
+            foreach ($Orders as $order) {
+                $data['tiles'][] = $this->formatOrderRecord($order, $boxes->get($order->id, collect()));
             }
 
             $ownedCount = $this->getOwnedTileCount((int) $userId);
@@ -914,15 +927,57 @@ class OrdersController extends Controller
     public function LatestPurchasedTiles(Request $request)
     {
         try {
-            $Orders = Orders::GetLatestPurchasedTiles();
+            $limit = max(1, min(100, (int) $request->query('limit', 48)));
+            $Orders = Orders::GetLatestPurchasedTiles($limit);
             $data = ['tiles' => []];
 
-            if (!empty($Orders)) {
-                foreach ($Orders as $order) {
-                    $data['tiles'][] = $this->formatOrderRecord($order);
-                }
+            $boxes = $this->boxesByOrder($Orders);
+            foreach ($Orders as $order) {
+                $data['tiles'][] = $this->formatOrderRecord($order, $boxes->get($order->id, collect()));
             }
 
+            return response()->json(['status' => true, 'data' => $data]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Finds active land areas by order id, custom URL slug or 3-word address (exact),
+     * or by title / owner username (partial). Used for flatmeta.io/u/<slug> links and
+     * search, since the map only has the land in view. At most 8 results.
+     */
+    public function FindArea(Request $request)
+    {
+        try {
+            $q = trim((string) $request->query('q', ''));
+            if ($q === '' || mb_strlen($q) > 120) {
+                return response()->json(['status' => true, 'data' => ['tiles' => []]]);
+            }
+            $slug = trim(preg_replace('/-+/', '-', preg_replace('/[^a-z0-9-]/', '-', strtolower($q))), '-');
+            $like = '%' . addcslashes($q, '%_\\') . '%';
+
+            $Orders = Orders::select('orders.*', 'users.username', 'users.fullname')
+                ->leftJoin('users', 'orders.user_id', '=', 'users.id')
+                ->where('orders.status', '1')
+                ->where(function ($w) use ($q, $slug, $like) {
+                    if (ctype_digit($q)) {
+                        $w->orWhere('orders.id', (int) $q);
+                    }
+                    $w->orWhereRaw("JSON_VALID(orders.log) AND JSON_UNQUOTE(JSON_EXTRACT(orders.log, '$.slug')) = ?", [$slug])
+                        ->orWhereRaw("JSON_VALID(orders.log) AND JSON_UNQUOTE(JSON_EXTRACT(orders.log, '$.three_words')) = ?", [strtolower($q)])
+                        ->orWhere('orders.name', 'like', $like)
+                        ->orWhere('users.username', 'like', $like);
+                })
+                ->orderBy('orders.id', 'desc')
+                ->limit(8)
+                ->get();
+
+            $data = ['tiles' => []];
+            $boxes = $this->boxesByOrder($Orders);
+            foreach ($Orders as $order) {
+                $data['tiles'][] = $this->formatOrderRecord($order, $boxes->get($order->id, collect()));
+            }
             return response()->json(['status' => true, 'data' => $data]);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()]);
