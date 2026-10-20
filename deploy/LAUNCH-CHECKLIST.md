@@ -8,7 +8,7 @@ Everything in the code is done and tested against a mocked PayPal. These steps n
 - [ ] **PayPal Business account** for the business that will receive the money.
 - [ ] **Ask PayPal to enable Payouts** on that account (Payouts sends sellers their 90%). Until it is enabled, sales still work, but payouts show as *failed* in the CMS and you pay sellers by hand.
 - [ ] **Email sending**: an account with Mailgun, Postmark, Amazon SES or your domain's SMTP, with flatmeta.io verified as a sender. People cannot sign in without it.
-- [ ] **Server** with PHP 8.1+, MySQL, nginx (see `deploy/README.md`), and DNS for `flatmeta.io`, `www.flatmeta.io` and `api.flatmeta.io` pointing at it.
+- [ ] **Server** with PHP 8.2+, MySQL, nginx (see `deploy/README.md`), and DNS for `flatmeta.io`, `www.flatmeta.io` and `api.flatmeta.io` pointing at it.
 
 ## Legal (in the app repo, `src/app/pages/legal/legal.page.ts` and `.html`)
 

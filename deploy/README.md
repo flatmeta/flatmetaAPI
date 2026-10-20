@@ -7,7 +7,7 @@ Two sites on one Linux server (Ubuntu 22.04+ works well):
 | `https://flatmeta.io` | The app (static files built from the `flatmeta.io` repo) |
 | `https://api.flatmeta.io` | This Laravel API, plus `wss://api.flatmeta.io/ws` for live avatars and chat |
 
-Needs: PHP 8.1+ (with `pdo_mysql`, `mbstring`, `curl`, `openssl`, `gd`), Composer, MySQL 8 / MariaDB 10.6+, nginx, supervisor, certbot, Node 18+ (to build the app).
+Needs: PHP 8.2+ (with `pdo_mysql`, `mbstring`, `curl`, `openssl`, `gd`), Composer, MySQL 8 / MariaDB 10.6+, nginx, supervisor, certbot, Node 18+ (to build the app).
 
 ## 1. API
 
@@ -17,7 +17,7 @@ composer install --no-dev --optimize-autoloader
 cp .env.production.example .env        # fill in every value (see below)
 php artisan key:generate
 php artisan migrate --force
-php artisan passport:keys              # first install only
+php artisan passport:keys              # first install only (Passport refuses keys readable by others: keep storage/oauth-*.key at 600/660)
 php artisan passport:client --personal # first install only
 php artisan db:seed --class=ImagesSeeder --force       # country flags for land artwork
 php artisan db:seed --class=ReportTextSeeder --force   # reasons for reporting users
