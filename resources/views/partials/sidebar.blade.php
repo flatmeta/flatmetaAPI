@@ -77,6 +77,13 @@
                   </div>
                </a>
 
+               <a class="nav-link " href="{{ route('Payments') }}" aria-controls="admins">
+                  <div class="d-flex align-items-center"><span class="nav-link-icon"><span
+                     class="fas fa-dollar-sign"></span></span><span
+                     class="nav-link-text ps-1">Payments</span>
+                  </div>
+               </a>
+
                <a class="nav-link " href="{{ route('ReportText') }}" aria-controls="admins">
                   <div class="d-flex align-items-center"><span class="nav-link-icon"><span
                      class="fas fa-exclamation-triangle"></span></span><span

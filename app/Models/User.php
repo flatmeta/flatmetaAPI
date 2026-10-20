@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Support\Facades\DB;
-use Laravel\Passport\HasApiTokens;
+use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -122,6 +122,7 @@ class User extends Authenticatable
             'username' => $this->username,
             'email' => $this->email,
             'phone' => $this->phone ?? '',
+            'paypal_email' => $this->paypal_email ?: $this->email,
             'clan' => $this->clan ?: self::DEFAULT_CLAN,
             'user_image' => self::imageUrl($this->image),
             'avatar_config' => self::cleanAvatarConfig($this->avatar_config),

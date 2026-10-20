@@ -15,7 +15,10 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        // Needs the cron entry from deploy/README.md: * * * * * php artisan schedule:run
+        $schedule->command('billing:enforce')->everyFifteenMinutes()->withoutOverlapping();
+        $schedule->command('payouts:retry')->hourly()->withoutOverlapping();
+        $schedule->command('sanctum:prune-expired --hours=24')->daily();
     }
 
     /**

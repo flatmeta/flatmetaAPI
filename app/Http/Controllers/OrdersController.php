@@ -8,9 +8,9 @@ use App\Models\OrderHistory;
 use App\Models\Orders;
 use App\Models\User;
 use App\Models\UserBoxes;
+use App\Services\Billing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\URL;
 
 class OrdersController extends Controller
 {
@@ -113,16 +113,7 @@ class OrdersController extends Controller
 
     protected function cancelExistingSubscription(?string $subscriptionId, string $reason): bool
     {
-        if (empty($subscriptionId)) {
-            return false;
-        }
-        try {
-            $paypal = new PaypalController();
-            $paypal->cancel_subscription($subscriptionId, ['reason' => $reason]);
-            return true;
-        } catch (\Throwable $e) {
-            return false;
-        }
+        return app(Billing::class)->safeCancel($subscriptionId, $reason);
     }
 
     /** Squares of many orders in one query, keyed by order id (avoids one query per order). */
@@ -183,7 +174,11 @@ class OrdersController extends Controller
             'sale_price' => (float) ($order->sale_price ?? 0),
             'on_sale' => ($order->on_sale ?? '0') == '1',
             'sale_status' => $order->on_sale ?? '0',
-            'buy_link' => url('PurchaseTile/' . $order->id),
+            'status' => (string) $order->status,
+            'subscription_status' => $order->subscription_status,
+            'next_due_date' => $order->next_due_date ? (string) $order->next_due_date : null,
+            'paid_until' => $order->next_expiry ? (string) $order->next_expiry : null,
+            'billing_required' => !empty($meta['billing_required']),
             'created_at' => $order->created_at ? (string) $order->created_at : now()->toISOString(),
             'tiles' => $tilesArr,
         ];
@@ -229,13 +224,6 @@ class OrdersController extends Controller
         return $taken;
     }
 
-    /**
-     * Signed, short-lived PayPal checkout link for $buyerId (the URL cannot be edited to pay for someone else).
-     */
-    protected function purchaseUrl(int $orderId, int $buyerId): string
-    {
-        return URL::temporarySignedRoute('PurchaseTile', now()->addHour(), ['id' => $orderId, 'userID' => $buyerId]);
-    }
 
     /**
      * Claims tiles from Cart or direct payload, applying the 100 Free Squares quota
@@ -335,6 +323,21 @@ class OrdersController extends Controller
 
                 DB::commit();
 
+                $approveUrl = null;
+                if ($billableTiles > 0) {
+                    $billing = app(Billing::class);
+                    try {
+                        $approveUrl = $billing->startSubscription($order, $request->user(), $billableTiles);
+                    } catch (\Throwable $e) {
+                        $billing->cancelReservation((int) $order->id);
+                        $message = $e instanceof \RuntimeException && !str_starts_with($e->getMessage(), 'PayPal')
+                            ? $e->getMessage()
+                            : 'Payments are temporarily unavailable, so squares beyond your free 100 can\'t be claimed right now.';
+                        \Log::error('Could not start land subscription', ['order' => $order->id, 'error' => $e->getMessage()]);
+                        return response()->json(['status' => false, 'message' => $message, 'data' => ['message' => $message]]);
+                    }
+                }
+
                 $data = [
                     'id' => $order->id,
                     'order_id' => $order->id,
@@ -344,10 +347,10 @@ class OrdersController extends Controller
                     'billable_tiles' => $billableTiles,
                     'monthly_amount' => $monthlyAmount,
                     'free_claimed' => $billableTiles === 0,
-                    'url' => $billableTiles > 0 ? $this->purchaseUrl((int) $order->id, $user_id) : null,
+                    'url' => $approveUrl,
                     'message' => $billableTiles === 0
                         ? "Claimed {$count} square(s) using your 100 Free Squares quota!"
-                        : "Reserved {$count} square(s). Complete the PayPal subscription (\${$monthlyAmount}/month) to activate them.",
+                        : "Reserved {$count} square(s) for 24 hours. Approve the PayPal subscription (\${$monthlyAmount}/month, first payment in one month) to activate them.",
                 ];
 
                 return response()->json(['status' => true, 'data' => $data]);
@@ -433,58 +436,6 @@ class OrdersController extends Controller
         }
     }
 
-    /**
-     * Marketplace purchase with 10% Platform Commission.
-     * Ownership is NOT transferred here: the buyer gets a signed PayPal checkout link and the transfer
-     * (plus seller subscription cancellation & OrderHistory logging) happens in TransactionCompleted
-     * once PayPal confirms the subscription.
-     * Brief [j] & [k]: "if sold subscription for sold tiles will cancel, remaining month will charge them, next month will not charge them"
-     */
-    public function BuyMarketplaceOrder(Request $request)
-    {
-        $buyerId = (int) $request->user()->id;
-        $orderId = $request->order_id;
-
-        if (!$orderId) {
-            return response()->json(['status' => false, 'message' => 'order_id is required']);
-        }
-
-        try {
-            $order = Orders::findOrFail($orderId);
-
-            if ($order->status != '1' || $order->on_sale != '1') {
-                return response()->json(['status' => false, 'data' => ['message' => 'This land area is not for sale.']]);
-            }
-            if ((int) $order->user_id === $buyerId) {
-                return response()->json(['status' => false, 'data' => ['message' => 'You already own this land area.']]);
-            }
-
-            $pricePerTile = (float) $order->sale_price;
-            if ($pricePerTile <= 0) {
-                return response()->json(['status' => false, 'data' => ['message' => 'This listing has no valid sale price.']]);
-            }
-
-            $tileCount = max(1, (int) $order->no_of_tiles);
-            $totalPrice = round($tileCount * $pricePerTile, 2);
-            $commission = round($totalPrice * self::PLATFORM_COMMISSION_RATE, 2);
-            $sellerNet = round($totalPrice - $commission, 2);
-
-            return response()->json([
-                'status' => true,
-                'data' => [
-                    'order_id' => $order->id,
-                    'requires_payment' => true,
-                    'url' => $this->purchaseUrl((int) $order->id, $buyerId),
-                    'total_price' => $totalPrice,
-                    'commission' => $commission,
-                    'seller_net' => $sellerNet,
-                    'message' => 'Complete the PayPal checkout to take ownership of this land area.',
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['status' => false, 'message' => $e->getMessage()]);
-        }
-    }
 
     /**
      * Releases an owned land area back to the open map and cancels any recurring subscription
@@ -590,301 +541,15 @@ class OrdersController extends Controller
         return ['bought_usd' => round($bought, 2), 'sold_usd' => round($sold, 2)];
     }
 
-    public function PurchaseTile($id, $user_id = null)
-    {
-        $Orders = Orders::findOrFail($id);
-        $buyerId = (int) ($user_id ?: $Orders->user_id);
-        $User = User::findOrFail($buyerId);
 
-        if ($Orders->on_sale == '1' && (float) $Orders->sale_price > 0 && (int) $Orders->user_id !== $buyerId && $Orders->status == '1') {
-            $quantity = max(1, (int) round($Orders->no_of_tiles * $Orders->sale_price * 10));
-            $type = 'sale';
-        } elseif ((int) $Orders->user_id === $buyerId && $Orders->status != '1') {
-            $alreadyOwned = $this->getOwnedTileCount($buyerId);
-            $billable = max(1, (int) $Orders->no_of_tiles - max(0, self::FREE_TILE_QUOTA - $alreadyOwned));
-            $quantity = $billable;
-            $type = 'new';
-        } else {
-            abort(404, 'This land area is not available for purchase.');
-        }
 
-        DB::beginTransaction();
-        try {
-            $planId = env('PLAN_ID', 'P-1G766395YH0963631MKLR5GI');
-            $data = [
-                'plan_id' => $planId,
-                'quantity' => $quantity,
-                'start_time' => Carbon::now()->addSeconds(10),
-                'subscriber' => [
-                    'name' => ['given_name' => $User->fullname, 'surname' => $User->username],
-                    'email_address' => $User->email,
-                ],
-                'application_context' => [
-                    'brand_name' => (config('app.name') ?: env('APP_NAME', 'Flatmeta')) . ' Monthly Subscription',
-                    'locale' => 'en-US',
-                    'shipping_preference' => 'SET_PROVIDED_ADDRESS',
-                    'user_action' => 'SUBSCRIBE_NOW',
-                    'payment_method' => [
-                        'payer_selected' => 'PAYPAL',
-                        'payee_preferred' => 'IMMEDIATE_PAYMENT_REQUIRED',
-                    ],
-                    'return_url' => url('TransactionCompleted/' . $id . '/' . $type),
-                    'cancel_url' => url('TransactionCancel/' . $id),
-                ],
-            ];
 
-            $paypal = new PaypalController();
-            $subscribe = $paypal->subscribe($data);
-            if (!isset($subscribe->debug_id) && isset($subscribe->links) && !empty($subscribe->id)) {
-                foreach ($subscribe->links as $link) {
-                    if ($link->rel == 'approve') {
-                        // Remember which subscription belongs to which buyer/order; TransactionCompleted
-                        // only accepts a subscription_id recorded here.
-                        $meta = $this->decodeOrderMeta($Orders);
-                        $meta['pending_subscriptions'][$subscribe->id] = [
-                            'type' => $type,
-                            'buyer_id' => $buyerId,
-                            'plan_id' => $planId,
-                            'quantity' => $quantity,
-                            'created_at' => now()->toISOString(),
-                        ];
-                        $Orders->log = json_encode($meta);
-                        $Orders->save();
-                        DB::commit();
-                        return redirect($link->href);
-                    }
-                }
-            }
-            DB::rollBack();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            echo 'Something went wrong: ' . $e->getMessage();
-        }
-    }
 
-    public function CreateProd()
-    {
-        $data = [
-            'name' => 'Flatmeta.io',
-            'type' => 'SERVICE',
-            'description' => 'flatmeta provides the land in a virtual world where u can buy and sale your land',
-            'category' => 'SERVICES',
-            'home_url' => $this->baseUrl(),
-        ];
 
-        $paypal = new PaypalController();
-        $subscribe = $paypal->make_product($data);
-        print_r($subscribe);
-    }
 
-    public function CreatePlan()
-    {
-        $data = [
-            'product_id' => 'PROD-6U229780257548608',
-            'name' => 'Flatmeta Plan ($0.10 / Square / Month)',
-            'quantity_supported' => true,
-            'description' => 'FlatMeta virtual land subscription ($0.10 per square per month after 100 free squares)',
-        ];
 
-        $data['billing_cycles'][] = [
-            'frequency' => ['interval_unit' => 'MONTH', 'interval_count' => 1],
-            'tenure_type' => 'REGULAR',
-            'sequence' => 1,
-            'total_cycles' => 0,
-            'pricing_scheme' => [
-                'fixed_price' => [
-                    'value' => '0.10',
-                    'currency_code' => 'USD',
-                ],
-            ],
-        ];
-        $data['payment_preferences'] = [
-            'auto_bill_outstanding' => true,
-            'setup_fee' => ['value' => '0', 'currency_code' => 'USD'],
-            'setup_fee_failure_action' => 'CONTINUE',
-            'payment_failure_threshold' => 3,
-        ];
-        $data['taxes'] = [
-            'percentage' => '0',
-            'inclusive' => true,
-        ];
-        $paypal = new PaypalController();
-        $package = $paypal->make_package($data);
-        print_r($package);
-    }
 
-    public function GetProdById()
-    {
-        $paypal = new PaypalController();
-        $package = $paypal->get_product('PROD-6U229780257548608');
-        print_r($package);
-    }
 
-    public function GetPlanById()
-    {
-        $paypal = new PaypalController();
-        $package = $paypal->get_plan('P-4V708803SV048851WMKPTV3A');
-        print_r($package);
-    }
-
-    public function GetAllProducts()
-    {
-        $paypal = new PaypalController();
-        $package = $paypal->get_all_product();
-        print_r($package);
-    }
-
-    public function GetSubscriptionsDetails()
-    {
-        $paypal = new PaypalController();
-        $package = $paypal->get_subscription('I-KU7MXH8WSP1H');
-        print_r($package);
-    }
-
-    /**
-     * PayPal return URL. The subscription_id must be one PurchaseTile recorded for this order, it must be
-     * ACTIVE with the expected plan and quantity, and the buyer comes from that record (not the URL).
-     */
-    public function TransactionCompleted(Request $request, $id, $type = null, $userID = null)
-    {
-        $subscriptionId = (string) ($request['subscription_id'] ?? '');
-        if ($subscriptionId === '') {
-            return response()->json(['status' => false, 'data' => ['message' => 'Missing subscription.']]);
-        }
-
-        DB::beginTransaction();
-        try {
-            $Orders = Orders::lockForUpdate()->findOrFail($id);
-            $meta = $this->decodeOrderMeta($Orders);
-            $pending = $meta['pending_subscriptions'][$subscriptionId] ?? null;
-            if (!$pending) {
-                DB::rollBack();
-                return response()->json(['status' => false, 'data' => ['message' => 'Unknown subscription for this order.']]);
-            }
-
-            $paypal = new PaypalController();
-            $subscription_response = $paypal->get_subscription($subscriptionId);
-            if (
-                !$subscription_response
-                || ($subscription_response->status ?? '') !== 'ACTIVE'
-                || ($subscription_response->plan_id ?? '') !== $pending['plan_id']
-                || (int) ($subscription_response->quantity ?? 0) !== (int) $pending['quantity']
-            ) {
-                DB::rollBack();
-                return response()->json(['status' => false, 'data' => ['message' => 'Subscription is not active.']]);
-            }
-
-            // Single use
-            unset($meta['pending_subscriptions'][$subscriptionId]);
-            $buyerId = (int) $pending['buyer_id'];
-
-            if ($pending['type'] !== 'sale') {
-                $myTiles = UserBoxes::where('order_id', $Orders->id)->get(['lat', 'lng'])->toArray();
-                if ((int) $Orders->user_id !== $buyerId || !empty($this->findTakenTiles($myTiles, (int) $Orders->id, false))) {
-                    $this->cancelExistingSubscription($subscriptionId, 'Squares for order #' . $Orders->id . ' were no longer available.');
-                    $Orders->status = '2';
-                    $Orders->log = json_encode($meta);
-                    $Orders->save();
-                    DB::commit();
-                    return response()->json(['status' => false, 'data' => ['message' => 'These squares were claimed by someone else. Your subscription was cancelled.']]);
-                }
-
-                $meta['paypal_subscription'] = $subscription_response;
-                $Orders->status = '1';
-                $Orders->subscription_id = $subscriptionId;
-                $Orders->log = json_encode($meta);
-                $Orders->save();
-            } else {
-                if ($Orders->status != '1' || $Orders->on_sale != '1' || (int) $Orders->user_id === $buyerId) {
-                    $this->cancelExistingSubscription($subscriptionId, 'Land area #' . $Orders->id . ' was no longer for sale.');
-                    $Orders->log = json_encode($meta);
-                    $Orders->save();
-                    DB::commit();
-                    return response()->json(['status' => false, 'data' => ['message' => 'This land area is no longer for sale. Your subscription was cancelled.']]);
-                }
-
-                $totalAmount = $Orders->no_of_tiles * $Orders->sale_price;
-                $commission = round($totalAmount * self::PLATFORM_COMMISSION_RATE, 2);
-
-                // Brief [j] & [k]: Cancel previous owner's subscription so next month will not charge them
-                $oldSubscriptionId = $Orders->subscription_id ?? null;
-                $subCancelled = $this->cancelExistingSubscription(
-                    $oldSubscriptionId,
-                    'Land area #' . $Orders->id . ' resold on FlatMeta; previous subscription cancelled for next cycle.'
-                );
-
-                $OrderHistory = new OrderHistory();
-                $OrderHistory->old_order_id = $Orders->id;
-                $OrderHistory->user_id = $Orders->user_id;
-                $OrderHistory->name = $Orders->name;
-                $OrderHistory->no_of_tiles = $Orders->no_of_tiles;
-                $OrderHistory->amount = $Orders->amount;
-                $OrderHistory->custom_details = $Orders->custom_details;
-                $OrderHistory->sale_price = $Orders->sale_price;
-                $OrderHistory->log = json_encode([
-                    'paypal' => $subscription_response,
-                    'buyer_id' => $buyerId,
-                    'platform_commission_10pct' => $commission,
-                    'seller_net_90pct' => round($totalAmount - $commission, 2),
-                    'previous_subscription_id' => $oldSubscriptionId,
-                    'seller_subscription_cancelled' => $subCancelled,
-                ]);
-                $OrderHistory->next_due_date = $Orders->next_due_date;
-                $OrderHistory->next_expiry = $Orders->next_expiry;
-                $OrderHistory->save();
-
-                $meta['paypal_subscription'] = $subscription_response;
-                $Orders->user_id = $buyerId;
-                $Orders->amount = $totalAmount;
-                $Orders->sale_price = '';
-                $Orders->on_sale = '0';
-                $Orders->status = '1';
-                $Orders->subscription_id = $subscriptionId;
-                $Orders->log = json_encode($meta);
-                $Orders->save();
-            }
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['status' => false, 'message' => $e->getMessage()]);
-        }
-
-        // Back to the app (not the API host) after PayPal.
-        $redirectUrl = rtrim(config('app.frontend_url'), '/') . '/thankyou';
-        return redirect()->to($redirectUrl);
-    }
-
-    /**
-     * PayPal cancel URL. Only a pending (unpaid) order is marked cancelled; active orders and
-     * marketplace listings are never touched from here.
-     */
-    public function TransactionCancel(Request $request, $id)
-    {
-        $Orders = Orders::findOrFail($id);
-
-        $meta = $this->decodeOrderMeta($Orders);
-        $subscriptionId = (string) ($request['subscription_id'] ?? '');
-        if ($subscriptionId !== '' && isset($meta['pending_subscriptions'][$subscriptionId])) {
-            unset($meta['pending_subscriptions'][$subscriptionId]);
-            $Orders->log = json_encode($meta);
-        }
-        if ($Orders->status == '0') {
-            $Orders->status = '2';
-        }
-        $Orders->save();
-
-        $data['message'] = 'Transaction Cancelled. Please Try Again.';
-        return response()->json(['status' => true, 'data' => $data]);
-    }
-
-    public function UpdatePlanPricing(Request $request, $id) {}
-
-    public function index()
-    {
-        $data['Orders'] = Orders::GetAllOrders();
-        return view('Subscriptions.list', $data);
-    }
 
     public function ViewTiles($id)
     {

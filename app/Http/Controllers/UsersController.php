@@ -70,6 +70,13 @@ class UsersController extends Controller
                 }
                 $user->clan = $request->clan;
             }
+            if ($request->has('paypal_email')) {
+                $payoutEmail = strtolower(trim((string) $request->paypal_email));
+                if ($payoutEmail !== '' && !filter_var($payoutEmail, FILTER_VALIDATE_EMAIL)) {
+                    return response()->json(['status' => false, 'message' => 'Enter a valid PayPal email for payouts.']);
+                }
+                $user->paypal_email = $payoutEmail ?: null;
+            }
             if ($request->has('avatar_config')) {
                 $config = User::cleanAvatarConfig($request->avatar_config);
                 $user->avatar_config = $config ? json_encode($config) : null;
@@ -302,10 +309,8 @@ class UsersController extends Controller
             $user->verification_attempts = 0;
 
             if ($user->save()) {
-                try {
-                    $user->tokens()->update(['revoked' => true]);
-                } catch (\Throwable $e) {
-                }
+                // A new password signs the account out everywhere.
+                $user->tokens()->delete();
                 $data['message'] = 'Successfully reset password';
                 return response()->json(['status' => true, 'data' => $data]);
             } else {

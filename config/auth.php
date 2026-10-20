@@ -41,11 +41,7 @@ return [
             'provider' => 'users',
         ],
 
-        'api' => [
-            'driver' => 'passport',
-            'provider' => 'users',
-        ],
-        
+        // API requests authenticate with Sanctum personal access tokens (auth:sanctum).
     ],
 
     /*

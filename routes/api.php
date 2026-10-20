@@ -16,9 +16,9 @@ use Illuminate\Support\Facades\Route;
 
 ## Auth (rate limited: codes and passwords must not be guessable by brute force) ##
 Route::middleware('throttle:10,1')->group(function () use ($router) {
-    $router->post('/login', 'App\Http\Controllers\PassportAuthController@login');
-    $router->post('/register', 'App\Http\Controllers\PassportAuthController@register');
-    $router->post('/VerifyEmail', 'App\Http\Controllers\PassportAuthController@verifyEmail');
+    $router->post('/login', 'App\Http\Controllers\AuthController@login');
+    $router->post('/register', 'App\Http\Controllers\AuthController@register');
+    $router->post('/VerifyEmail', 'App\Http\Controllers\AuthController@verifyEmail');
 
     ## Password Recovery ##
     $router->post('/ForgetPassword', 'App\Http\Controllers\UsersController@ForgetPassword');
@@ -43,7 +43,7 @@ $router->get('/CommunityProposals', 'App\Http\Controllers\OrdersController@Commu
 ## Reporting ##
 $router->get('/GetAllReportText', 'App\Http\Controllers\ReportTextController@GetAllReportText');
 
-Route::middleware('auth:api')->group(function () use ($router) {
+Route::middleware('auth:sanctum')->group(function () use ($router) {
     ## User ##
     $router->get('/getuserbytoken', 'App\Http\Controllers\UsersController@GetUserDetails');
     $router->post('/UpdateUser', 'App\Http\Controllers\UsersController@UpdateUser');
@@ -61,7 +61,9 @@ Route::middleware('auth:api')->group(function () use ($router) {
     $router->post('/UpdateSalePrice', 'App\Http\Controllers\OrdersController@UpdateSalePrice');
     $router->get('/MyPlaces', 'App\Http\Controllers\OrdersController@MyPlaces');
     $router->post('/ClaimTiles', 'App\Http\Controllers\OrdersController@ClaimTiles');
-    $router->post('/BuyMarketplaceOrder', 'App\Http\Controllers\OrdersController@BuyMarketplaceOrder');
+    $router->post('/BuyMarketplaceOrder', 'App\Http\Controllers\BillingController@BuyMarketplaceOrder');
+    $router->post('/StartBilling', 'App\Http\Controllers\BillingController@StartBilling');
+    $router->get('/MyPayments', 'App\Http\Controllers\BillingController@MyPayments');
     $router->post('/ReleaseOrder', 'App\Http\Controllers\OrdersController@ReleaseOrder');
     $router->post('/UpdateCustomDetailsPublic', 'App\Http\Controllers\OrdersController@UpdateCustomDetails');
 
@@ -87,6 +89,5 @@ Route::middleware('auth:api')->group(function () use ($router) {
     $router->post('/VoteCommunityProposal', 'App\Http\Controllers\OrdersController@VoteCommunityProposal');
 });
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
+## PayPal webhook (verified with PayPal's signature check, no user token) ##
+$router->post('/paypal/webhook', 'App\Http\Controllers\BillingController@webhook');

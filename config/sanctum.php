@@ -31,7 +31,8 @@ return [
     |
     */
 
-    'guard' => ['web'],
+    // Empty: the app and CMS never share a session, so API requests use bearer tokens only.
+    'guard' => [],
 
     /*
     |--------------------------------------------------------------------------
@@ -44,7 +45,7 @@ return [
     |
     */
 
-    'expiration' => null,
+    'expiration' => 60 * 24 * 365, // a year, like the Passport tokens it replaced
 
     /*
     |--------------------------------------------------------------------------

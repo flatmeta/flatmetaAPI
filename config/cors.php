@@ -19,7 +19,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    // Only the FlatMeta app may call the API from a browser: the website plus the
+    // iOS/Android app shells (Capacitor). Add more with CORS_ALLOWED_ORIGINS=a,b
+    'allowed_origins' => array_values(array_filter(array_merge(
+        [rtrim(env('FRONTEND_URL', 'http://localhost:4200'), '/'), 'capacitor://localhost', 'https://localhost', 'http://localhost'],
+        array_map('trim', explode(',', (string) env('CORS_ALLOWED_ORIGINS', '')))
+    ))),
 
     'allowed_origins_patterns' => [],
 
