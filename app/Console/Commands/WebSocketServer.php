@@ -53,7 +53,9 @@ class WebSocketServer extends Command
         stream_set_blocking($this->master, false);
         $this->info("FlatMeta WebSocket server listening on {$address}");
 
-        if (function_exists('pcntl_async_signals')) {
+        // Clean shutdown on Ctrl+C / supervisor stop. Some hosts (e.g. HestiaCP) disable part of pcntl;
+        // without it the process still stops on SIGTERM, just without closing sockets first.
+        if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
             pcntl_async_signals(true);
             pcntl_signal(SIGINT, [$this, 'shutdown']);
             pcntl_signal(SIGTERM, [$this, 'shutdown']);
