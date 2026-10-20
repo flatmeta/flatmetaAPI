@@ -148,6 +148,8 @@ The real-time server is `php artisan websocket:serve`, listening on `127.0.0.1:3
    location /ws {
        proxy_pass http://127.0.0.1:3500;
        proxy_http_version 1.1;
+       # HestiaCP's site template hides the Upgrade header; WebSocket handshakes need it.
+       proxy_pass_header Upgrade;
        proxy_set_header Upgrade $http_upgrade;
        proxy_set_header Connection "upgrade";
        proxy_set_header Host $host;
