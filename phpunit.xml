@@ -1,38 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="./vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
-         colors="true"
->
-    <testsuites>
-        <testsuite name="Unit">
-            <directory suffix="Test.php">./tests/Unit</directory>
-        </testsuite>
-        <testsuite name="Feature">
-            <directory suffix="Test.php">./tests/Feature</directory>
-        </testsuite>
-    </testsuites>
-    <coverage processUncoveredFiles="true">
-        <include>
-            <directory suffix=".php">./app</directory>
-        </include>
-    </coverage>
-    <php>
-        <server name="APP_ENV" value="testing"/>
-        <server name="BCRYPT_ROUNDS" value="4"/>
-        <server name="CACHE_DRIVER" value="array"/>
-        <!-- Tests wipe their database: always a separate one, never the real `flatmeta`. -->
-        <server name="DB_DATABASE" value="flatmeta_test" force="true"/>
-        <env name="DB_DATABASE" value="flatmeta_test" force="true"/>
-        <server name="PAYPAL_MODE" value="sandbox" force="true"/>
-        <server name="PAYPAL_CLIENT_ID" value="test-client" force="true"/>
-        <server name="PAYPAL_SECRET" value="test-secret" force="true"/>
-        <server name="PAYPAL_PLAN_ID" value="P-TESTPLAN" force="true"/>
-        <server name="PAYPAL_WEBHOOK_ID" value="WH-TEST" force="true"/>
-        <server name="FRONTEND_URL" value="https://app.test" force="true"/>
-        <server name="MAIL_MAILER" value="array"/>
-        <server name="QUEUE_CONNECTION" value="sync"/>
-        <server name="SESSION_DRIVER" value="array"/>
-        <server name="TELESCOPE_ENABLED" value="false"/>
-    </php>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd" bootstrap="vendor/autoload.php" colors="true" cacheDirectory=".phpunit.cache">
+  <testsuites>
+    <testsuite name="Unit">
+      <directory suffix="Test.php">./tests/Unit</directory>
+    </testsuite>
+    <testsuite name="Feature">
+      <directory suffix="Test.php">./tests/Feature</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <server name="APP_ENV" value="testing"/>
+    <server name="BCRYPT_ROUNDS" value="4"/>
+    <server name="CACHE_DRIVER" value="array"/>
+    <!-- Tests wipe their database: always a separate one, never the real `flatmeta`. -->
+    <server name="DB_DATABASE" value="flatmeta_test" force="true"/>
+    <env name="DB_DATABASE" value="flatmeta_test" force="true"/>
+    <server name="PAYPAL_MODE" value="sandbox" force="true"/>
+    <server name="PAYPAL_CLIENT_ID" value="test-client" force="true"/>
+    <server name="PAYPAL_SECRET" value="test-secret" force="true"/>
+    <server name="PAYPAL_PLAN_ID" value="P-TESTPLAN" force="true"/>
+    <server name="PAYPAL_WEBHOOK_ID" value="WH-TEST" force="true"/>
+    <server name="FRONTEND_URL" value="https://app.test" force="true"/>
+    <server name="MAIL_MAILER" value="array"/>
+    <server name="QUEUE_CONNECTION" value="sync"/>
+    <server name="SESSION_DRIVER" value="array"/>
+    <server name="TELESCOPE_ENABLED" value="false"/>
+  </php>
+  <source>
+    <include>
+      <directory suffix=".php">./app</directory>
+    </include>
+  </source>
 </phpunit>
