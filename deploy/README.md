@@ -1,5 +1,7 @@
 # Putting FlatMeta live
 
+> Using HestiaCP? Follow [`HESTIACP.md`](HESTIACP.md) instead of steps 1–4 below; sections 5–6 (email, PayPal) apply to both.
+
 Two sites on one Linux server (Ubuntu 22.04+ works well):
 
 | Address | What runs there |
