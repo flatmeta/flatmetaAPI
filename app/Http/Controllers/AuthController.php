@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 
-class PassportAuthController extends Controller
+class AuthController extends Controller
 {
     protected function baseUrl(): string
     {
@@ -35,13 +35,10 @@ class PassportAuthController extends Controller
         return $user->apiPayload();
     }
 
+    /** A Sanctum personal access token; the app sends it as "Authorization: Bearer <token>". */
     protected function issueTokenForUser(User $user): string
     {
-        try {
-            return $user->createToken('flatmeta')->accessToken;
-        } catch (\Throwable $e) {
-            return 'flatmeta_token_' . base64_encode($user->id . ':' . $user->email);
-        }
+        return $user->createToken('flatmeta')->plainTextToken;
     }
 
     public function register(Request $request)
@@ -114,10 +111,7 @@ class PassportAuthController extends Controller
      */
     protected function revokeAllTokens(User $user): void
     {
-        try {
-            $user->tokens()->update(['revoked' => true]);
-        } catch (\Throwable $e) {
-        }
+        $user->tokens()->delete();
     }
 
     protected function sendEmailLoginCode(string $email)

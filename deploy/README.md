@@ -17,8 +17,6 @@ composer install --no-dev --optimize-autoloader
 cp .env.production.example .env        # fill in every value (see below)
 php artisan key:generate
 php artisan migrate --force
-php artisan passport:keys              # first install only (Passport refuses keys readable by others: keep storage/oauth-*.key at 600/660)
-php artisan passport:client --personal # first install only
 php artisan db:seed --class=ImagesSeeder --force       # country flags for land artwork
 php artisan db:seed --class=ReportTextSeeder --force   # reasons for reporting users
 php artisan config:cache && php artisan route:cache
@@ -44,7 +42,9 @@ Add the Laravel scheduler to the `www-data` crontab (`sudo crontab -u www-data -
 * * * * * cd /var/www/flatmetaAPI && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-It releases unpaid reservations and land whose rent stopped (every 15 minutes) and retries failed seller payouts (hourly).
+It releases unpaid reservations and land whose rent stopped (every 15 minutes), retries failed seller payouts (hourly) and deletes expired sign-in tokens (daily).
+
+Sign-in tokens are Laravel Sanctum personal access tokens, valid for a year (`config/sanctum.php`). If you are upgrading a server that ran the older Passport version, `migrate` drops the old `oauth_*` tables, everyone signs in again once, and you can delete `storage/oauth-private.key` and `storage/oauth-public.key`.
 
 ## 3. The app
 

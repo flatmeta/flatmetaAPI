@@ -459,13 +459,13 @@ class WebSocketServer extends Command
             $request = Request::create('/', 'GET');
             $request->headers->set('Authorization', 'Bearer ' . $token);
             $request->headers->set('Accept', 'application/json');
-            return Auth::guard('api')->setRequest($request)->user();
+            return Auth::guard('sanctum')->setRequest($request)->user();
         } catch (\Throwable $e) {
             // The DB connection may have dropped in this long-running process; retry once.
             try {
                 DB::reconnect();
                 Auth::forgetGuards();
-                return Auth::guard('api')->setRequest($request)->user();
+                return Auth::guard('sanctum')->setRequest($request)->user();
             } catch (\Throwable $e2) {
                 $this->warn('Token check failed: ' . $e2->getMessage());
                 return null;

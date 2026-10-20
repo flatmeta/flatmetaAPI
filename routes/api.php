@@ -16,9 +16,9 @@ use Illuminate\Support\Facades\Route;
 
 ## Auth (rate limited: codes and passwords must not be guessable by brute force) ##
 Route::middleware('throttle:10,1')->group(function () use ($router) {
-    $router->post('/login', 'App\Http\Controllers\PassportAuthController@login');
-    $router->post('/register', 'App\Http\Controllers\PassportAuthController@register');
-    $router->post('/VerifyEmail', 'App\Http\Controllers\PassportAuthController@verifyEmail');
+    $router->post('/login', 'App\Http\Controllers\AuthController@login');
+    $router->post('/register', 'App\Http\Controllers\AuthController@register');
+    $router->post('/VerifyEmail', 'App\Http\Controllers\AuthController@verifyEmail');
 
     ## Password Recovery ##
     $router->post('/ForgetPassword', 'App\Http\Controllers\UsersController@ForgetPassword');
@@ -43,7 +43,7 @@ $router->get('/CommunityProposals', 'App\Http\Controllers\OrdersController@Commu
 ## Reporting ##
 $router->get('/GetAllReportText', 'App\Http\Controllers\ReportTextController@GetAllReportText');
 
-Route::middleware('auth:api')->group(function () use ($router) {
+Route::middleware('auth:sanctum')->group(function () use ($router) {
     ## User ##
     $router->get('/getuserbytoken', 'App\Http\Controllers\UsersController@GetUserDetails');
     $router->post('/UpdateUser', 'App\Http\Controllers\UsersController@UpdateUser');
@@ -87,10 +87,6 @@ Route::middleware('auth:api')->group(function () use ($router) {
     ## Community Mini-Git-Lab ##
     $router->post('/SubmitCommunityProposal', 'App\Http\Controllers\OrdersController@SubmitCommunityProposal');
     $router->post('/VoteCommunityProposal', 'App\Http\Controllers\OrdersController@VoteCommunityProposal');
-});
-
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
 });
 
 ## PayPal webhook (verified with PayPal's signature check, no user token) ##

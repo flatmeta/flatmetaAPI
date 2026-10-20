@@ -309,10 +309,8 @@ class UsersController extends Controller
             $user->verification_attempts = 0;
 
             if ($user->save()) {
-                try {
-                    $user->tokens()->update(['revoked' => true]);
-                } catch (\Throwable $e) {
-                }
+                // A new password signs the account out everywhere.
+                $user->tokens()->delete();
                 $data['message'] = 'Successfully reset password';
                 return response()->json(['status' => true, 'data' => $data]);
             } else {

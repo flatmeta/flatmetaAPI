@@ -6,7 +6,7 @@ use App\Models\Orders;
 use App\Models\User;
 use App\Models\UserBoxes;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Passport\Passport;
+use Laravel\Sanctum\Sanctum;
 use Tests\FakesPayPal;
 use Tests\TestCase;
 
@@ -28,7 +28,7 @@ abstract class BillingTestCase extends TestCase
 
     protected function actingAsUser(User $user): self
     {
-        Passport::actingAs($user, [], 'api');
+        Sanctum::actingAs($user);
         return $this;
     }
 
