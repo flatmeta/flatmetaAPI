@@ -14,6 +14,14 @@ class TrustProxies extends Middleware
      */
     protected $proxies;
 
+    public function __construct()
+    {
+        // Behind nginx / a load balancer in production (TRUSTED_PROXIES=* or a list of IPs),
+        // so HTTPS and client IPs are detected correctly and signed links stay valid.
+        $proxies = config('app.trusted_proxies');
+        $this->proxies = $proxies === '*' ? '*' : ($proxies ? array_map('trim', explode(',', $proxies)) : null);
+    }
+
     /**
      * The headers that should be used to detect proxies.
      *

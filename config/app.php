@@ -61,6 +61,8 @@ return [
     */
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:4200'),
 
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

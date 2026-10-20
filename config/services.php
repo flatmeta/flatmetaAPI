@@ -30,4 +30,20 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    | PayPal REST app (developer.paypal.com > Apps & Credentials).
+    | PAYPAL_MODE: sandbox for testing, live for real money.
+    | PAYPAL_PLAN_ID: created with `php artisan paypal:setup`.
+    | PAYPAL_WEBHOOK_ID: from the webhook you add pointing at /api/paypal/webhook.
+    */
+    'paypal' => [
+        'mode' => env('PAYPAL_MODE', 'sandbox'),
+        'client_id' => env('PAYPAL_CLIENT_ID'),
+        'secret' => env('PAYPAL_SECRET'),
+        'plan_id' => env('PAYPAL_PLAN_ID', env('PLAN_ID')),
+        'webhook_id' => env('PAYPAL_WEBHOOK_ID'),
+        'currency' => env('PAYPAL_CURRENCY', 'USD'),
+        'payouts_enabled' => env('PAYPAL_PAYOUTS_ENABLED', true),
+    ],
+
 ];

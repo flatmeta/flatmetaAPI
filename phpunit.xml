@@ -21,8 +21,15 @@
         <server name="APP_ENV" value="testing"/>
         <server name="BCRYPT_ROUNDS" value="4"/>
         <server name="CACHE_DRIVER" value="array"/>
-        <!-- <server name="DB_CONNECTION" value="sqlite"/> -->
-        <!-- <server name="DB_DATABASE" value=":memory:"/> -->
+        <!-- Tests wipe their database: always a separate one, never the real `flatmeta`. -->
+        <server name="DB_DATABASE" value="flatmeta_test" force="true"/>
+        <env name="DB_DATABASE" value="flatmeta_test" force="true"/>
+        <server name="PAYPAL_MODE" value="sandbox" force="true"/>
+        <server name="PAYPAL_CLIENT_ID" value="test-client" force="true"/>
+        <server name="PAYPAL_SECRET" value="test-secret" force="true"/>
+        <server name="PAYPAL_PLAN_ID" value="P-TESTPLAN" force="true"/>
+        <server name="PAYPAL_WEBHOOK_ID" value="WH-TEST" force="true"/>
+        <server name="FRONTEND_URL" value="https://app.test" force="true"/>
         <server name="MAIL_MAILER" value="array"/>
         <server name="QUEUE_CONNECTION" value="sync"/>
         <server name="SESSION_DRIVER" value="array"/>

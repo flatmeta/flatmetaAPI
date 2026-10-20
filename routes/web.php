@@ -23,24 +23,17 @@ Route::get('/', function () {
     return view('auth.login'); 
 });
 
-## PayPal checkout (links are signed by the API, so the buyer id cannot be changed) ##
-Route::any('/PurchaseTile/{id}/{userID?}', 'App\Http\Controllers\OrdersController@PurchaseTile')
-    ->middleware('signed')
-    ->name('PurchaseTile');
-Route::any('/TransactionCompleted/{id}/{type}/{userID?}', 'App\Http\Controllers\OrdersController@TransactionCompleted');
-Route::any('/TransactionCancel/{id}', 'App\Http\Controllers\OrdersController@TransactionCancel');
+## PayPal sends buyers back here, then on to the app's /thankyou page ##
+Route::get('/billing/subscription/return', 'App\Http\Controllers\BillingController@subscriptionReturn');
+Route::get('/billing/subscription/cancel/{order}', 'App\Http\Controllers\BillingController@subscriptionCancel');
+Route::get('/billing/sale/return', 'App\Http\Controllers\BillingController@saleReturn');
+Route::get('/billing/sale/cancel', 'App\Http\Controllers\BillingController@saleCancel');
 
 Auth::routes(['register' => false]);
 
 Route::group(['middleware' => ['auth', 'admin']], function () { 
 
-    ## PayPal setup / debug helpers & one-off seeding ##
-    Route::any('/CreateProd', 'App\Http\Controllers\OrdersController@CreateProd');
-    Route::any('/CreatePlan', 'App\Http\Controllers\OrdersController@CreatePlan');
-    Route::any('/GetProdById', 'App\Http\Controllers\OrdersController@GetProdById');
-    Route::any('/GetPlanById', 'App\Http\Controllers\OrdersController@GetPlanById');
-    Route::any('/GetAllProducts', 'App\Http\Controllers\OrdersController@GetAllProducts');
-    Route::any('/GetSubscriptionsDetails', 'App\Http\Controllers\OrdersController@GetSubscriptionsDetails');
+    ## One-off seeding ##
     Route::any('/AddNewImages', 'App\Http\Controllers\ImageController@AddNewImages');
 
     Route::get('/home/{type?}/{date?}', [HomeController::class, 'index'])->name('home');
@@ -49,6 +42,9 @@ Route::group(['middleware' => ['auth', 'admin']], function () {
     Route::any('/CreateUser/{id?}', [UsersController::class, 'CreateUser'])->name('CreateUser');
     Route::any('/StoreUser', [UsersController::class, 'StoreUser'])->name('StoreUser');
     Route::any('/DeleteUser/{id}', [UsersController::class, 'DeleteUser'])->name('DeleteUser');
+
+    Route::get('/Payments', [\App\Http\Controllers\PaymentsAdminController::class, 'index'])->name('Payments');
+    Route::post('/Payments/{id}/retry', [\App\Http\Controllers\PaymentsAdminController::class, 'retryPayout'])->name('RetryPayout');
 
     Route::any('/Subscriptions',    [OrdersController::class, 'index'])->name('Subscriptions');
 

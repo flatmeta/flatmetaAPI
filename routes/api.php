@@ -61,7 +61,9 @@ Route::middleware('auth:api')->group(function () use ($router) {
     $router->post('/UpdateSalePrice', 'App\Http\Controllers\OrdersController@UpdateSalePrice');
     $router->get('/MyPlaces', 'App\Http\Controllers\OrdersController@MyPlaces');
     $router->post('/ClaimTiles', 'App\Http\Controllers\OrdersController@ClaimTiles');
-    $router->post('/BuyMarketplaceOrder', 'App\Http\Controllers\OrdersController@BuyMarketplaceOrder');
+    $router->post('/BuyMarketplaceOrder', 'App\Http\Controllers\BillingController@BuyMarketplaceOrder');
+    $router->post('/StartBilling', 'App\Http\Controllers\BillingController@StartBilling');
+    $router->get('/MyPayments', 'App\Http\Controllers\BillingController@MyPayments');
     $router->post('/ReleaseOrder', 'App\Http\Controllers\OrdersController@ReleaseOrder');
     $router->post('/UpdateCustomDetailsPublic', 'App\Http\Controllers\OrdersController@UpdateCustomDetails');
 
@@ -90,3 +92,6 @@ Route::middleware('auth:api')->group(function () use ($router) {
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+## PayPal webhook (verified with PayPal's signature check, no user token) ##
+$router->post('/paypal/webhook', 'App\Http\Controllers\BillingController@webhook');
