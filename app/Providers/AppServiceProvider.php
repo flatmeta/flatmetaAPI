@@ -23,6 +23,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        // The CMS uses Bootstrap 5 (Falcon theme), so page links use Bootstrap markup.
+        \Illuminate\Pagination\Paginator::useBootstrapFive();
+
         // Production runs behind HTTPS: make every generated link (PayPal return pages, uploads) https.
         if ($this->app->environment('production')) {
             \Illuminate\Support\Facades\URL::forceScheme('https');

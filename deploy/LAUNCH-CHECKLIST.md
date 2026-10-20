@@ -8,7 +8,7 @@ Everything in the code is done and tested against a mocked PayPal. These steps n
 - [ ] **PayPal Business account** for the business that will receive the money.
 - [ ] **Ask PayPal to enable Payouts** on that account (Payouts sends sellers their 90%). Until it is enabled, sales still work, but payouts show as *failed* in the CMS and you pay sellers by hand.
 - [ ] **Email sending**: an account with Mailgun, Postmark, Amazon SES or your domain's SMTP, with flatmeta.io verified as a sender. People cannot sign in without it.
-- [ ] **Server** with PHP 8.2+, MySQL, nginx (see `deploy/README.md`), and DNS for `flatmeta.io`, `www.flatmeta.io` and `api.flatmeta.io` pointing at it.
+- [ ] **Server** with PHP 8.3+, MySQL, nginx (see `deploy/README.md`), and DNS for `flatmeta.io`, `www.flatmeta.io` and `api.flatmeta.io` pointing at it.
 
 ## Legal (in the app repo, `src/app/pages/legal/legal.page.ts` and `.html`)
 
@@ -40,11 +40,6 @@ Follow *Test in sandbox before going live* in `deploy/README.md`:
 
 ## Soon after launch
 
-- [ ] **Upgrade the frameworks.** Laravel 8, Angular 15 and Ionic 6 no longer receive security fixes. `composer audit` still lists 6 advisories in Laravel 8 and packages it pins (php-jwt, flysystem), fixed only by upgrading. They don't affect FlatMeta as it is used today:
-  - the "email" validation rule and signed URLs: not used;
-  - the debug page: off in production (`APP_DEBUG=false`);
-  - file validation: uploads are also checked by their real content, renamed, and never executed.
-
-  But any new code could hit them, so upgrading should be the first job after launch.
+- [x] **Frameworks upgraded:** the API is on Laravel 13 (PHP 8.3+), and `composer audit` reports no known vulnerabilities. The app is being moved to Angular 22 and Ionic 9.
 - [ ] Record the how-to video and set `howToVideoUrl` in the app's `src/environments/environment.prod.ts`.
 - [ ] Back up the database daily (most hosts offer this; or `mysqldump` from cron).

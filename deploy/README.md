@@ -7,7 +7,7 @@ Two sites on one Linux server (Ubuntu 22.04+ works well):
 | `https://flatmeta.io` | The app (static files built from the `flatmeta.io` repo) |
 | `https://api.flatmeta.io` | This Laravel API, plus `wss://api.flatmeta.io/ws` for live avatars and chat |
 
-Needs: PHP 8.2+ (with `pdo_mysql`, `mbstring`, `curl`, `openssl`, `gd`), Composer, MySQL 8 / MariaDB 10.6+, nginx, supervisor, certbot, Node 18+ (to build the app).
+Needs: PHP 8.3+ (with `pdo_mysql`, `mbstring`, `curl`, `openssl`, `gd`), Composer, MySQL 8 / MariaDB 10.6+, nginx, supervisor, certbot, Node 22+ (to build the app).
 
 ## 1. API
 
@@ -65,7 +65,7 @@ sudo certbot certonly --nginx -d flatmeta.io -d www.flatmeta.io -d api.flatmeta.
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-(Adjust `php8.2-fpm.sock` in the API config to your PHP version.)
+(Adjust `php8.3-fpm.sock` in the API config to your PHP version.)
 
 ## 5. Email
 
